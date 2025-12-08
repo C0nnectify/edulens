@@ -1,0 +1,342 @@
+# Data Collection Orchestrator Configuration
+
+# ==============================================
+# MongoDB Configuration
+# ==============================================
+mongodb:
+  uri: "mongodb://localhost:27017"
+  db_name: "edulens"
+  collections:
+    faculty: "faculty_database"
+    admission: "admission_data"
+    evaluations: "profile_evaluations"
+
+# ==============================================
+# Redis Configuration (for Celery)
+# ==============================================
+redis:
+  url: "redis://localhost:6379/0"
+  # Alternative for production:
+  # url: "redis://:password@hostname:6379/0"
+
+# ==============================================
+# Output Directories
+# ==============================================
+output:
+  raw_data_dir: "data/raw"
+  clean_data_dir: "data/clean"
+  aggregated_dir: "data/aggregated"
+  ml_ready_dir: "data/ml_ready"
+  logs_dir: "logs"
+  visualizations_dir: "data/visualizations"
+
+# ==============================================
+# Faculty Scraping Configuration
+# ==============================================
+faculty_scraping:
+  enabled: true
+  schedule: "weekly"  # or cron: "0 2 * * 1" (Monday 2 AM)
+
+  universities:
+    # Stanford CS Department
+    - university_id: "stanford"
+      university_name: "Stanford University"
+      department: "Computer Science"
+      url: "https://cs.stanford.edu/people/faculty"
+      use_crawl: false
+      max_pages: 20
+
+    # MIT EECS Department
+    - university_id: "mit"
+      university_name: "Massachusetts Institute of Technology"
+      department: "Electrical Engineering and Computer Science"
+      url: "https://www.eecs.mit.edu/people/faculty-advisors"
+      use_crawl: false
+      max_pages: 20
+
+    # UC Berkeley EECS
+    - university_id: "berkeley"
+      university_name: "University of California, Berkeley"
+      department: "Electrical Engineering and Computer Sciences"
+      url: "https://eecs.berkeley.edu/people/faculty"
+      use_crawl: false
+      max_pages: 20
+
+    # Carnegie Mellon CS
+    - university_id: "cmu"
+      university_name: "Carnegie Mellon University"
+      department: "Computer Science"
+      url: "https://www.cs.cmu.edu/directory/faculty"
+      use_crawl: false
+      max_pages: 30
+
+    # Add more universities as needed...
+
+  # Scraping settings
+  max_retries: 3
+  retry_delay: 2  # seconds
+  request_delay: 1  # seconds between requests
+  timeout: 30  # seconds
+
+# ==============================================
+# GradCafe Scraping Configuration
+# ==============================================
+gradcafe_scraping:
+  enabled: false  # Set to true when implemented
+  schedule: "daily"  # or cron: "0 3 * * *" (Daily 3 AM)
+
+  queries:
+    - "Stanford Computer Science"
+    - "MIT EECS"
+    - "Berkeley CS"
+    - "CMU Computer Science"
+    - "Georgia Tech CS"
+    - "UIUC Computer Science"
+    # Add more search queries...
+
+  # Scraping settings
+  max_pages_per_query: 10
+  min_year: 2020  # Only scrape data from 2020 onwards
+
+# ==============================================
+# Reddit Scraping Configuration
+# ==============================================
+reddit_scraping:
+  enabled: false  # Set to true when implemented
+  schedule: "daily"  # or cron: "0 4 * * *" (Daily 4 AM)
+
+  # Reddit API credentials (set via environment variables)
+  # REDDIT_CLIENT_ID
+  # REDDIT_CLIENT_SECRET
+  # REDDIT_USER_AGENT
+
+  subreddits:
+    - "gradadmissions"
+    - "gradschool"
+    - "ApplyingToCollege"
+    - "cscareerquestions"
+    - "GRE"
+
+  keywords:
+    - "admission"
+    - "acceptance"
+    - "rejection"
+    - "waitlist"
+    - "GRE"
+    - "GPA"
+    - "TOEFL"
+    - "IELTS"
+    - "profile evaluation"
+
+  # Scraping settings
+  posts_per_subreddit: 100
+  max_comment_depth: 2
+  min_score: 5  # Minimum upvote score
+
+# ==============================================
+# Data Aggregation Configuration
+# ==============================================
+data_aggregation:
+  enabled: true
+  schedule: "daily"  # or cron: "0 6 * * *" (Daily 6 AM)
+
+  # Deduplication settings
+  fuzzy_match_threshold: 0.85
+  duplicate_detection: true
+
+  # Cross-referencing
+  cross_reference_faculty: true
+  calculate_statistics: true
+
+# ==============================================
+# Data Cleaning Configuration
+# ==============================================
+data_cleaning:
+  # GPA normalization
+  gpa_scales:
+    - 4.0
+    - 5.0
+    - 10.0
+    - 100.0  # Percentage
+
+  # Test score validation ranges
+  test_score_ranges:
+    gre_verbal: [130, 170]
+    gre_quant: [130, 170]
+    gre_awa: [0, 6]
+    gmat: [200, 800]
+    toefl: [0, 120]
+    ielts: [0, 9]
+
+  # Cleaning options
+  remove_duplicates: true
+  impute_missing: true
+  validate_records: true
+  remove_invalid: true
+
+  # Quality thresholds
+  min_data_quality_score: 60  # Percentage
+
+# ==============================================
+# ML Data Preparation Configuration
+# ==============================================
+ml_preparation:
+  # Train/val/test split
+  test_size: 0.15
+  validation_size: 0.15
+  random_state: 42
+
+  # Feature engineering
+  normalize_features: true
+  scale_features: true
+
+  # Output formats
+  export_csv: true
+  export_json: true
+  export_pickle: true
+
+  # Visualizations
+  generate_visualizations: true
+  visualization_dpi: 300
+
+# ==============================================
+# Celery Configuration
+# ==============================================
+celery:
+  broker_url: "${redis.url}"
+  result_backend: "${redis.url}"
+
+  # Task settings
+  task_serializer: "json"
+  accept_content: ["json"]
+  result_serializer: "json"
+  timezone: "UTC"
+  enable_utc: true
+
+  # Worker settings
+  worker_prefetch_multiplier: 1
+  worker_max_tasks_per_child: 50
+
+  # Time limits
+  task_time_limit: 3600  # 1 hour
+  task_soft_time_limit: 3300  # 55 minutes
+
+  # Retry settings
+  task_default_max_retries: 3
+  task_default_retry_delay: 60  # seconds
+
+# ==============================================
+# Monitoring Dashboard Configuration
+# ==============================================
+monitoring:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8001
+
+  # Dashboard settings
+  refresh_interval: 5  # seconds
+  max_recent_results: 100
+  max_recent_errors: 100
+
+  # Flower (Celery monitoring)
+  flower_enabled: false
+  flower_port: 5555
+
+# ==============================================
+# Notification Configuration
+# ==============================================
+notifications:
+  enabled: false  # Set to true to enable notifications
+
+  # Email settings (optional)
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_user: "${EMAIL_USER}"
+    smtp_password: "${EMAIL_PASSWORD}"
+    from_email: "noreply@edulen.com"
+    to_emails:
+      - "admin@edulen.com"
+
+    # When to send notifications
+    on_success: false
+    on_failure: true
+    on_retry: false
+
+  # Slack notifications (optional)
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channel: "#data-pipeline"
+
+# ==============================================
+# Logging Configuration
+# ==============================================
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # File logging
+  file_logging: true
+  log_file: "logs/orchestrator.log"
+  max_log_size: 10485760  # 10 MB
+  backup_count: 5
+
+  # Console logging
+  console_logging: true
+  rich_logging: true
+
+# ==============================================
+# Performance & Resource Configuration
+# ==============================================
+performance:
+  # Parallel processing
+  max_workers: 4
+  concurrent_scrapers: 2
+
+  # Memory management
+  chunk_size: 1000  # For batch processing
+  max_memory_per_task: "2GB"
+
+  # Rate limiting
+  rate_limit_enabled: true
+  requests_per_minute: 60
+
+# ==============================================
+# Environment-Specific Overrides
+# ==============================================
+# Override settings based on environment
+# Set ENVIRONMENT variable: development, staging, production
+
+development:
+  logging:
+    level: "DEBUG"
+  monitoring:
+    enabled: true
+  notifications:
+    enabled: false
+
+staging:
+  logging:
+    level: "INFO"
+  monitoring:
+    enabled: true
+  notifications:
+    enabled: true
+    email:
+      on_failure: true
+
+production:
+  logging:
+    level: "WARNING"
+  monitoring:
+    enabled: true
+  notifications:
+    enabled: true
+    email:
+      on_success: true
+      on_failure: true
+  performance:
+    max_workers: 8
+    concurrent_scrapers: 4

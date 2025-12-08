@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-a8c0f0574afa4466bd0393ba68c48d0d"
+      }
+    },
+    "figma": {
+      "type": "sse",
+      "url": "http://127.0.0.1:3845/mcp"
+    }
+  }
+}

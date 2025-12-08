@@ -1,0 +1,228 @@
+{
+  "testimonials": [
+    {
+      "id": 1,
+      "name": "Rahima Akter",
+      "university": "MIT, USA",
+      "imageUrl": "/images/testimonials/rahima-akter.jpg",
+      "quote": "EduLens helped me craft a perfect SOP. Got accepted to my dream school!",
+      "rating": 5,
+      "imagePrompt": "Professional headshot of a confident young Bangladeshi female student wearing glasses and a blue blazer, warm smile, soft studio lighting, high quality portrait"
+    },
+    {
+      "id": 2,
+      "name": "Karim Rahman",
+      "university": "Oxford, UK",
+      "imageUrl": "/images/testimonials/karim-rahman.jpg",
+      "quote": "The AI research agent saved me months of work. Found perfect programs instantly.",
+      "rating": 5,
+      "imagePrompt": "Professional headshot of a friendly young Bangladeshi male student in smart casual attire, genuine smile, natural lighting, high quality portrait"
+    },
+    {
+      "id": 3,
+      "name": "Nadia Islam",
+      "university": "Toronto, Canada",
+      "imageUrl": "/images/testimonials/nadia-islam.jpg",
+      "quote": "Deadline tracking kept me organized. Never missed a single submission date.",
+      "rating": 5,
+      "imagePrompt": "Professional headshot of a cheerful young Bangladeshi female student with long dark hair, wearing a white shirt, confident expression, soft lighting"
+    }
+  ],
+  "features": [
+    {
+      "id": 1,
+      "icon": "Target",
+      "title": "Personalized Documents",
+      "description": "AI analyzes your unique story and creates compelling SOPs and essays that stand out",
+      "imageUrl": "/images/features/personalized-documents.jpg",
+      "imagePrompt": "Clean UI mockup showing a document editor with AI suggestions, highlighting key phrases in a SOP. Modern interface with purple gradient accents, split-screen showing before/after document quality. Professional, detailed, high-fidelity design."
+    },
+    {
+      "id": 2,
+      "icon": "Zap",
+      "title": "Smart Program Matching",
+      "description": "Discover programs that perfectly align with your profile, preferences, and career goals",
+      "imageUrl": "/images/features/program-matching.jpg",
+      "imagePrompt": "Dashboard UI showing university cards with match percentage scores (85%, 92%, 78%) displayed prominently. Map visualization with pins, filtering options, and clean typography. Modern design with blue-purple gradients."
+    },
+    {
+      "id": 3,
+      "icon": "Shield",
+      "title": "Application Automation",
+      "description": "Automated deadline tracking, document management, and submission reminders in one place",
+      "imageUrl": "/images/features/application-automation.jpg",
+      "imagePrompt": "Calendar-style interface showing application deadlines with color-coded status indicators (pending, completed, upcoming). Kanban board view with application cards. Clean, organized, professional UI design with subtle animations."
+    }
+  ],
+  "benefits": [
+    {
+      "id": 1,
+      "icon": "FileText",
+      "title": "Document AI",
+      "description": "Generate flawless SOPs, LORs, and essays tailored to your profile in minutes",
+      "gradient": "from-[#5C6BFF] to-[#7C4DFF]"
+    },
+    {
+      "id": 2,
+      "icon": "Search",
+      "title": "Research AI",
+      "description": "Discover perfect-fit programs across 50+ countries with intelligent matching",
+      "gradient": "from-[#7C4DFF] to-[#5C6BFF]"
+    },
+    {
+      "id": 3,
+      "icon": "CheckSquare",
+      "title": "Tracker AI",
+      "description": "Never miss a deadline with automated tracking and smart reminders",
+      "gradient": "from-[#5C6BFF] to-[#2B2F8A]"
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "number": "01",
+      "icon": "UserCircle",
+      "title": "Share Your Profile",
+      "description": "Tell us your background, goals, and preferences in 5 minutes"
+    },
+    {
+      "id": 2,
+      "number": "02",
+      "icon": "Sparkles",
+      "title": "AI Researches for You",
+      "description": "Our agents analyze thousands of programs to find your perfect matches"
+    },
+    {
+      "id": 3,
+      "number": "03",
+      "icon": "FileCheck",
+      "title": "Documents Generated",
+      "description": "Receive personalized SOPs, essays, and recommendation templates"
+    },
+    {
+      "id": 4,
+      "number": "04",
+      "icon": "Rocket",
+      "title": "Apply with Confidence",
+      "description": "Track deadlines, submit applications, and get accepted faster"
+    }
+  ],
+  "pricingPlans": [
+    {
+      "id": 1,
+      "name": "Starter",
+      "price": "Free",
+      "period": null,
+      "description": "Perfect for exploring your options",
+      "popular": false,
+      "features": [
+        "AI Program Research (3 searches)",
+        "Basic SOP Template",
+        "Application Tracker",
+        "Community Access"
+      ],
+      "cta": "Get Started"
+    },
+    {
+      "id": 2,
+      "name": "Pro",
+      "price": "$49",
+      "period": "/month",
+      "description": "For serious applicants",
+      "popular": true,
+      "features": [
+        "Unlimited Program Research",
+        "AI-Generated SOPs & Essays",
+        "Smart Deadline Tracking",
+        "LOR Templates",
+        "Priority Support",
+        "Document Reviews"
+      ],
+      "cta": "Start Free Trial"
+    },
+    {
+      "id": 3,
+      "name": "Premium",
+      "price": "$99",
+      "period": "/month",
+      "description": "Complete application suite",
+      "popular": false,
+      "features": [
+        "Everything in Pro",
+        "1-on-1 Expert Consultation",
+        "Interview Preparation",
+        "Visa Guidance",
+        "Scholarship Matching",
+        "Unlimited Revisions"
+      ],
+      "cta": "Contact Sales"
+    }
+  ],
+  "faqs": [
+    {
+      "id": 1,
+      "question": "How does the AI generate personalized documents?",
+      "answer": "Our AI analyzes your profile, academic background, and target programs to create unique, compelling SOPs and essays that highlight your strengths and align with university requirements."
+    },
+    {
+      "id": 2,
+      "question": "Can I use EduLens for multiple countries?",
+      "answer": "Yes! EduLens supports applications to 50+ countries including USA, UK, Canada, Australia, Germany, and more. Our AI adapts to different application requirements."
+    },
+    {
+      "id": 3,
+      "question": "Is there a free trial available?",
+      "answer": "Yes, we offer a 7-day free trial for the Pro plan. No credit card required. You can explore all features and cancel anytime."
+    },
+    {
+      "id": 4,
+      "question": "How accurate is the program matching?",
+      "answer": "Our AI achieves 95% accuracy by analyzing thousands of data points including your profile, preferences, admission statistics, and program requirements."
+    },
+    {
+      "id": 5,
+      "question": "Can I get help from human experts?",
+      "answer": "Premium plan includes 1-on-1 consultations with study abroad experts. Pro and Starter users have access to our community and email support."
+    }
+  ],
+  "stats": [
+    {
+      "number": "10,000+",
+      "label": "Students Helped"
+    },
+    {
+      "number": "50+",
+      "label": "Countries"
+    },
+    {
+      "number": "95%",
+      "label": "Success Rate"
+    },
+    {
+      "number": "24/7",
+      "label": "AI Support"
+    }
+  ],
+  "trustBadges": [
+    {
+      "icon": "Globe",
+      "text": "50+ Countries"
+    },
+    {
+      "icon": "Clock",
+      "text": "24/7 AI Support"
+    },
+    {
+      "icon": "TrendingUp",
+      "text": "95% Accuracy"
+    }
+  ],
+  "partnerUniversities": [
+    "MIT",
+    "Oxford",
+    "Stanford",
+    "Cambridge",
+    "Harvard",
+    "Toronto"
+  ]
+}

@@ -1,0 +1,14 @@
+2025-11-18 18:32:40 | INFO     | app.services.embedding_service:__init__:26 - Embedding service initialized
+2025-11-18 18:32:40 | INFO     | app.services.embedding_service:__init__:26 - Embedding service initialized
+2025-11-18 18:32:41 | WARNING  | app.services.faculty_scraping_service:__init__:51 - Firecrawl API key not configured
+2025-11-18 18:32:41 | WARNING  | app.services.faculty_scraping_service:__init__:57 - Google API key not configured
+2025-11-18 18:32:41 | INFO     | app.services.faculty_scraping_service:__init__:72 - Faculty scraping service initialized
+2025-11-18 18:32:41 | WARNING  | app.services.model_training_service:__init__:96 - scikit-learn not available. ML training will be limited.
+2025-11-18 18:32:41 | INFO     | app.services.model_training_service:__init__:119 - Model training service initialized
+2025-11-18 18:32:41 | INFO     | app.services.admission_prediction_service:__init__:62 - Admission prediction service initialized
+2025-11-18 18:32:41 | WARNING  | app.services.sop_analysis_service:__init__:303 - GOOGLE_API_KEY not set, AI analysis will be limited
+2025-11-18 18:32:43 | INFO     | app.database.mongodb:connect_to_mongodb:24 - Connecting to MongoDB at mongodb://localhost:27017
+2025-11-18 18:32:43 | INFO     | app.database.mongodb:connect_to_mongodb:34 - Successfully connected to MongoDB
+2025-11-18 18:32:43 | INFO     | app.database.mongodb:create_indexes:126 - Creating database indexes
+2025-11-18 18:32:43 | INFO     | app.database.mongodb:create_indexes:190 - Database indexes created successfully
+2025-11-18 18:32:43 | INFO     | app.services.admission_prediction_service:load_latest_model:994 - No trained model found. Using heuristic predictions.

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  ai-service:
+    build: .
+    container_name: edulen-ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=edulens
+      - ENVIRONMENT=production
+      - DEBUG=False
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+    networks:
+      - ai-network
+
+  mongodb:
+    image: mongo:7.0
+    container_name: edulen-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=edulens
+    restart: unless-stopped
+    networks:
+      - ai-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  ai-network:
+    driver: bridge

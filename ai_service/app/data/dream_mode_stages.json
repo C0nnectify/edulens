@@ -1,0 +1,325 @@
+[
+  {
+    "id": "stage_1_dream_permission",
+    "order": 1,
+    "shortLabel": "Dream",
+    "fullTitle": "Stage 1 – Dream and Permission",
+    "themeColor": "#4F46E5",
+    "goal": "Allow yourself to seriously want this and set a direction for your study abroad dream, instead of treating it as fantasy.",
+    "dos": [
+      "Write a one page Dream Note about why you want to study abroad and what kind of life you want after your degree.",
+      "Tell one or two trusted people that you are seriously aiming for a top university, even if you do not know how yet.",
+      "Create a Dream to Your University folder in Drive or Notion to store ideas, links and notes about your journey."
+    ],
+    "donts": [
+      "Do not start by asking if it is impossible; assume it is possible and think about what the path could look like.",
+      "Do not spam professors or random people at this stage; you are still clarifying your dream.",
+      "Do not keep the dream only in your head; write it down somewhere permanent."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens Dream Mode shows you the full journey from first dream to arrival so you can see that study abroad is a clear process, not magic. Later, Reality Mode will turn this dream into a personalised plan."
+    },
+    "meta": {
+      "durationHint": "A few days to one week",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "id": "stage_2_define_target",
+    "order": 2,
+    "shortLabel": "Define",
+    "fullTitle": "Stage 2 – Define Target and Constraints",
+    "themeColor": "#6366F1",
+    "goal": "Turn a vague study abroad dream into a specific target with a degree type, field, intake and funding reality.",
+    "dos": [
+      "Decide a first version of your degree type such as bachelors, masters or PhD.",
+      "Choose a broad field or combination such as mechanical, AI, materials, urban planning or similar.",
+      "Decide an approximate intake year and whether you need full funding, partial funding or can self fund.",
+      "List at least one dream university and several strong alternatives so your plan is a system, not only one name."
+    ],
+    "donts": [
+      "Do not think in all or nothing terms like this one university or failure.",
+      "Do not pick a random field only because it sounds cool; read a few pages about what it actually involves.",
+      "Do not ignore funding needs, especially if you are from a lower income or Global South background."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "In Reality Mode, EduLens Personal Tracker will ask a few questions about your degree, field, intake year and funding needs, then convert that into a clear target plan and priority list."
+    },
+    "meta": {
+      "durationHint": "One to two weeks",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "id": "stage_3_profile_audit",
+    "order": 3,
+    "shortLabel": "Audit",
+    "fullTitle": "Stage 3 – Profile Audit",
+    "themeColor": "#7C3AED",
+    "goal": "Understand honestly where you stand today compared to typical admitted profiles in your target field.",
+    "dos": [
+      "List your CGPA and all key courses with grades, especially maths, core subjects and any computing courses.",
+      "List your skills such as programming languages, tools, modelling, design, languages and rate each from one to five.",
+      "List your research, projects, internships, competitions and leadership activities in one document.",
+      "Mark each area as strong, okay or needs work so you can see gaps clearly."
+    ],
+    "donts": [
+      "Do not lie to yourself about grades, skills or experience; admission committees see patterns, not only numbers.",
+      "Do not panic if you see many gaps; this stage exists so you can build a plan to fix them.",
+      "Do not immediately compare yourself to internet legends; compare with your own starting point."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens Personal Tracker can auto audit your profile from your inputs or uploaded CV, highlight strengths and gaps, and show a readiness score for your dream universities."
+    },
+    "meta": {
+      "durationHint": "One to two weeks",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "id": "stage_4_core_story",
+    "order": 4,
+    "shortLabel": "Build Story",
+    "fullTitle": "Stage 4 – Core Story and Strategy",
+    "themeColor": "#EC4899",
+    "goal": "Decide what kind of candidate you want universities to see and define a clear narrative around your interests and impact.",
+    "dos": [
+      "From your audit, choose one or two main themes such as computational manufacturing, smart and sustainable cities or AI for health.",
+      "Write three to four sentences describing the big problem you care about, tools you use or want to learn and your future impact.",
+      "Check that your dream universities have labs or groups that match these themes.",
+      "Use this core story as a filter when choosing projects, courses and activities next."
+    ],
+    "donts": [
+      "Do not try to be good at everything at the same time; depth and consistency are more powerful.",
+      "Do not copy someone else profile story; it must be based on what you have actually done and care about.",
+      "Do not change your core story every week without a good reason."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens uses AI to analyse your background and suggest one or two strong narrative directions, then aligns your future tasks, documents and recommendations around that core story."
+    },
+    "meta": {
+      "durationHint": "One week",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "id": "stage_5_build_profile",
+    "order": 5,
+    "shortLabel": "Build",
+    "fullTitle": "Stage 5 – Build Core Profile (Projects and Skills)",
+    "themeColor": "#F97316",
+    "goal": "Build one to three deep, credible projects and a supporting skill stack that match your core story.",
+    "dos": [
+      "Secure at least one anchor project such as a thesis, research assistant role or serious independent project aligned with your theme.",
+      "Add one or two supporting projects or contributions, for example open source work, competition projects or internships.",
+      "Keep a simple research or project log where you record what you did, problems, results and next steps.",
+      "Save code, plots, screenshots and summaries in an organised folder or repository."
+    ],
+    "donts": [
+      "Do not start many projects and leave them all half finished.",
+      "Do not focus only on online certificates while avoiding real work and deliverables.",
+      "Do not choose a fancy sounding project you do not understand; it is better to do something smaller but solid."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens can suggest project ideas based on your target field, help you break them into milestones, and track your progress so your profile grows toward the requirements of your dream universities."
+    },
+    "meta": {
+      "durationHint": "Two to six months",
+      "difficulty": "hard"
+    }
+  },
+  {
+    "id": "stage_6_explore_programs",
+    "order": 6,
+    "shortLabel": "Explore",
+    "fullTitle": "Stage 6 – Explore Programs and Labs",
+    "themeColor": "#10B981",
+    "goal": "Map the global landscape of programs and labs where you could fit, with a special focus on your dream universities.",
+    "dos": [
+      "Create a table of universities, programs, degrees, funding models, locations and deadlines.",
+      "For dream universities, list specific departments, research groups and labs that match your core story.",
+      "Read recent work from a few target labs to understand their questions and methods.",
+      "Group programs into dream, strong and safety categories for balance."
+    ],
+    "donts": [
+      "Do not rely only on rankings or brand names; focus on research fit and funding.",
+      "Do not add programs without checking whether they realistically support your funding needs.",
+      "Do not assume all programs in one country work in the same way; requirements differ."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens University Tracker monitors programs, labs and deadlines, and suggests matches where your profile and interests align, so you do not have to research everything manually."
+    },
+    "meta": {
+      "durationHint": "Two to four weeks",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "id": "stage_7_tests_requirements",
+    "order": 7,
+    "shortLabel": "Prepare",
+    "fullTitle": "Stage 7 – Tests and Formal Requirements",
+    "themeColor": "#0EA5E9",
+    "goal": "Identify and plan for all formal requirements such as English tests, standardised tests and compulsory documents.",
+    "dos": [
+      "Check which English tests and other exams each target program accepts and whether they are required, optional or waived.",
+      "Note test score ranges that successful applicants usually have and set realistic targets.",
+      "Plan when you will take each test, leaving time for one possible retake if needed.",
+      "Collect basic documents like transcripts, certificates and an updated CV in one place."
+    ],
+    "donts": [
+      "Do not spend an entire year only on tests while ignoring research and projects.",
+      "Do not register for tests very late; test dates and score reporting can take time.",
+      "Do not use shortcuts or unethical methods for test preparation."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens keeps a personalised requirement checklist and timeline for each target program, reminds you about test windows and helps you balance test prep with profile building."
+    },
+    "meta": {
+      "durationHint": "One to three months in parallel with other work",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "id": "stage_8_application_engine",
+    "order": 8,
+    "shortLabel": "Apply Docs",
+    "fullTitle": "Stage 8 – Application Engine (Statement, CV, Recommendations)",
+    "themeColor": "#F59E0B",
+    "goal": "Turn your story and experience into strong application documents that clearly communicate fit and potential.",
+    "dos": [
+      "Draft a statement of purpose structure with motivation, academic background, key projects, future goals and reasons for target programs.",
+      "Refine your CV so it highlights relevant courses, projects, research, skills and impact clearly and concisely.",
+      "Identify three to four recommenders who know your work and start building or reinforcing relationships early.",
+      "Prepare recommendation briefs summarising what you did with each recommender and what they might emphasise."
+    ],
+    "donts": [
+      "Do not copy statements from the internet or seniors; admission teams recognise generic and reused text.",
+      "Do not ask for letters from famous people who barely know you.",
+      "Do not list basic everyday software as your main skills."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens can auto build draft statements, CVs and recommendation request emails from your profile data, and keep them updated as you complete new projects or achievements."
+    },
+    "meta": {
+      "durationHint": "Four to eight weeks",
+      "difficulty": "hard"
+    }
+  },
+  {
+    "id": "stage_9_submit_applications",
+    "order": 9,
+    "shortLabel": "Apply",
+    "fullTitle": "Stage 9 – Submit Applications",
+    "themeColor": "#22C55E",
+    "goal": "Assemble and submit complete, accurate applications to a balanced set of programs before deadlines.",
+    "dos": [
+      "Create a checklist for each program that includes forms, essays, CV, test scores and recommendations.",
+      "Customise your statement and short answers for each program to reflect its specific strengths and labs.",
+      "Verify all data such as names, dates, courses and grades before submitting.",
+      "Submit a little before the deadline when possible to avoid last minute technical issues."
+    ],
+    "donts": [
+      "Do not reuse exactly the same statement for every program without any adaptation.",
+      "Do not wait until the final hour to submit applications.",
+      "Do not lose track of which documents went where; keep a simple tracker."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens Smart Matching and Auto Fill features can pre fill common fields, track which components are complete for each application and, in future versions, trigger submission when you meet all requirements."
+    },
+    "meta": {
+      "durationHint": "One to two months around deadlines",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "id": "stage_10_wait_interview",
+    "order": 10,
+    "shortLabel": "Decide",
+    "fullTitle": "Stage 10 – Waiting, Interviews and Updates",
+    "themeColor": "#3B82F6",
+    "goal": "Handle the waiting period productively, prepare for possible interviews and share important updates if they arise.",
+    "dos": [
+      "Continue work on your projects, courses or job instead of pausing life while you wait.",
+      "Prepare a clear two to three minute introduction and a simple explanation of your main project for potential interviews.",
+      "If you achieve something significant after applying, consider sending a concise update to relevant programs.",
+      "Start exploring backup options in parallel so you are not fully dependent on one outcome."
+    ],
+    "donts": [
+      "Do not email programs frequently asking for decisions; follow official timelines.",
+      "Do not obsessively check portals every hour at the cost of your health and work.",
+      "Do not define your self worth only by admission decisions."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens University Tracker can monitor portals and emails for you, surface important status changes, and the AI copilot can help you rehearse interview answers based on your own profile."
+    },
+    "meta": {
+      "durationHint": "Several weeks to a few months",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "id": "stage_11_admit_funding_visa",
+    "order": 11,
+    "shortLabel": "Visa",
+    "fullTitle": "Stage 11 – Admission, Funding and Visa",
+    "themeColor": "#8B5CF6",
+    "goal": "Convert offers into a concrete plan by understanding funding details and successfully completing the visa process.",
+    "dos": [
+      "Read offer letters carefully to understand funding amounts, duration and any conditions.",
+      "Compare offers based on research fit, funding, city costs and personal priorities.",
+      "Collect financial documents, transcripts, certificates and admission letters needed for visa applications.",
+      "Follow the correct visa steps such as paying required fees, filling forms and scheduling interviews."
+    ],
+    "donts": [
+      "Do not accept or decline offers without fully understanding funding and expectations.",
+      "Do not use fake financial documents or inconsistent information for visa processes.",
+      "Do not leave visa preparation to the last moment; embassy slots and processing can take time."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens can help you organise offer letters, compare options, and maintain a simple checklist and timeline for funding confirmation and visa steps, especially helpful for students from countries with complex documentation requirements."
+    },
+    "meta": {
+      "durationHint": "One to three months",
+      "difficulty": "hard"
+    }
+  },
+  {
+    "id": "stage_12_predeparture_thrive",
+    "order": 12,
+    "shortLabel": "Arrive",
+    "fullTitle": "Stage 12 – Pre Departure, Arrival and Thrive",
+    "themeColor": "#EC4899",
+    "goal": "Prepare for travel, settle in smoothly at your new university and start building a healthy, sustainable life there.",
+    "dos": [
+      "Arrange housing, flights, basic finances and health related preparations before departure.",
+      "Scan and safely store digital copies of all important documents and keep physical copies in your hand luggage.",
+      "Attend orientation events, connect with international offices, and join student or country specific groups when you arrive.",
+      "Schedule an early meeting with your advisor or key faculty to align expectations for your first semester."
+    ],
+    "donts": [
+      "Do not travel without clear accommodation or a backup plan for your first nights.",
+      "Do not carry all key documents only in checked baggage; keep essential items with you.",
+      "Do not isolate yourself after arrival; actively build a support network."
+    ],
+    "edulensFeatureHook": {
+      "title": "How EduLens helps in this stage",
+      "body": "EduLens Connection Engine can link you with peers and alumni from your new university, and your dashboard can show a pre departure checklist so you arrive more confident and less stressed."
+    },
+    "meta": {
+      "durationHint": "One to two months before and after travel",
+      "difficulty": "medium"
+    }
+  }
+]

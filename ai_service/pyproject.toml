@@ -1,0 +1,234 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "edulen-ai-service"
+version = "0.1.0"
+description = "AI-powered educational platform service with document processing, embeddings, and multi-agent capabilities"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {name = "EduLen Team", email = "team@edulen.com"},
+]
+keywords = ["ai", "education", "document-processing", "embeddings", "fastapi"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # FastAPI and server
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.32.0",
+    "python-multipart==0.0.12",
+    # ChromaDB for vector database
+    "chromadb==0.5.18",
+    # LangChain and Google Gemini
+    "langchain==0.3.7",
+    "langchain-community==0.3.7",
+    "langchain-chroma==0.2.0",
+    "langgraph==0.2.62",
+    "langgraph-checkpoint>=2.0.23",
+    "langgraph-store-mongodb>=0.1.0",
+    # Google AI
+    "google-generativeai>=0.8.0,<0.9.0",
+    # Document processing
+    "pypdf==5.1.0",
+    "PyPDF2==3.0.1",
+    "python-docx==1.1.2",
+    "python-pptx==1.0.2",
+    "unstructured==0.16.9",
+    "markdown==3.7",
+    "pytesseract==0.3.10",
+    "Pillow>=10.3.0",
+    # AI & Embeddings
+    "openai==1.10.0",
+    "sentence-transformers==2.3.1",
+    "tiktoken>=0.6.0",
+    "cohere==4.47",
+    # Web scraping and automation
+    "firecrawl",
+    "playwright==1.49.0",
+    "beautifulsoup4==4.12.3",
+    "lxml==5.3.0",
+    # Email notifications (SMTP)
+    "aiosmtplib==3.0.2",
+    "email-validator==2.2.0",
+    "jinja2==3.1.4",
+    # LinkedIn API (unofficial)
+    "linkedin-api==2.3.0",
+    # HTTP requests
+    "httpx==0.27.2",
+    "aiohttp==3.11.7",
+    "requests==2.32.3",
+    # Data validation
+    "pydantic==2.10.2",
+    "pydantic-settings==2.6.1",
+    # Environment variables
+    "python-dotenv==1.0.1",
+    # Async task queue
+    "celery==5.4.0",
+    "redis==5.2.0",
+    # MongoDB async driver
+    "motor==3.7.0",
+    "pymongo==4.10.1",
+    # Utilities
+    "python-dateutil==2.9.0.post0",
+    "pytz==2024.2",
+    "uuid==1.30",
+    "aiofiles==23.2.1",
+    "python-jose[cryptography]==3.3.0",
+    "passlib[bcrypt]==1.7.4",
+    # Processing
+    "numpy==1.26.3",
+    "scikit-learn==1.4.0",
+    "scipy>=1.13.0",
+    # Logging
+    "loguru==0.7.2",
+    "langchain-google-genai>=2.0.10",
+    "reportlab>=4.4.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "httpx>=0.27.0",
+    "pytest-mock>=3.10.0",
+]
+docs = [
+    "mkdocs>=1.4.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.20.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/edulen/ai-service"
+Documentation = "https://docs.edulen.com"
+Repository = "https://github.com/edulen/ai-service"
+Issues = "https://github.com/edulen/ai-service/issues"
+
+[project.scripts]
+edulen-ai = "app.main:main"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["app"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "chromadb.*",
+    "langchain.*",
+    "langgraph.*",
+    "unstructured.*",
+    "pytesseract.*",
+    "playwright.*",
+    "firecrawl.*",
+    "linkedin_api.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

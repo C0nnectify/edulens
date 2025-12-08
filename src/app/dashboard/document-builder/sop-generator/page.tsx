@@ -1,0 +1,564 @@
+/**
+ * SOP Generator Page
+ * Initial view: Input form only
+ * After generation: Resizable AI Chat | Editor layout
+ */
+'use client';
+
+import { useRef, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Save, Download, ArrowLeft, Trash2 } from 'lucide-react';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import UploadPanel from './components/UploadPanel';
+import AIChat from './components/AIChat';
+import Editor, { EditorHandle } from './components/Editor';
+import { saveSOP, listSOPs, getSOP, deleteSOP, SOPSummary } from './lib/api';
+
+export default function SOPGeneratorPage() {
+  const searchParams = useSearchParams();
+  const docIdFromUrl = searchParams?.get('id');
+  const editorRef = useRef<EditorHandle>(null);
+  const [uploadedFileIds, setUploadedFileIds] = useState<string[]>([]);
+  const [sopId, setSopId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [existingSOPs, setExistingSOPs] = useState<SOPSummary[]>([]);
+  const [activeSOPId, setActiveSOPId] = useState<string | null>(null);
+  const [hasGenerated, setHasGenerated] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState<Record<string, unknown> | null>(null);
+  const [hasAutoSaved, setHasAutoSaved] = useState(false);
+
+  // Load existing SOPs on first mount; if URL has ID, load that doc
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const summaries = await listSOPs(20);
+        if (!mounted) return;
+        setExistingSOPs(summaries);
+        
+        // Only load document if ID is explicitly provided in URL
+        if (docIdFromUrl) {
+          const doc = await getSOP(docIdFromUrl);
+          if (!mounted) return;
+          setGeneratedContent(doc.editor_json as Record<string, unknown>);
+          setSopId(doc.id);
+          setActiveSOPId(doc.id);
+          setHasGenerated(true);
+        }
+        // Otherwise, show the create form (don't auto-load)
+      } catch (e) {
+        console.error('Failed to list existing SOPs', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [docIdFromUrl]);
+
+  const handleSelectExisting = async (id: string) => {
+    try {
+      const doc = await getSOP(id);
+      setGeneratedContent(doc.editor_json as Record<string, unknown>);
+      // Prefer HTML to preserve formatting; for older docs fix markdown '**' to <strong>
+      const html = doc.html && doc.html.trim().length > 0
+        ? convertMarkdownBoldToHtml(doc.html)
+        : jsonToHtmlWithMarkdown(doc.editor_json as Record<string, unknown>);
+      editorRef.current?.setContent(html);
+      setSopId(doc.id);
+      setActiveSOPId(doc.id);
+      setHasGenerated(true);
+    } catch (e) {
+      console.error('Failed to load SOP', e);
+    }
+  };
+
+  const handleNewSOP = () => {
+    setGeneratedContent(null);
+    setSopId(null);
+    setActiveSOPId(null);
+    setHasGenerated(false);
+    setHasAutoSaved(false);
+  };
+
+  const handleFilesChange = (files: Array<{ file_id: string }>) => {
+    setUploadedFileIds(files.map(f => f.file_id));
+  };
+
+  const handleGenerationStart = () => {
+    setIsGenerating(true);
+  };
+
+  const handleSOPGenerated = () => {
+    setIsGenerating(false);
+    setHasGenerated(true);
+  };
+
+  const handleGeneratedContent = (content: Record<string, unknown>) => {
+    setGeneratedContent(content);
+  };
+
+  const handleBackToForm = () => {
+    setHasGenerated(false);
+    setHasAutoSaved(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const editorJson = editorRef.current?.getJSON();
+      if (!editorJson) {
+        throw new Error('No content to save');
+      }
+      // Use editor HTML to preserve styling (fonts, title)
+      const html = editorRef.current?.getHTML() || '';
+
+      const title = extractTitleFromEditorJSON(editorJson) || 'My Statement of Purpose';
+
+      const response = await saveSOP({
+        sop_id: sopId || undefined,
+        title,
+        editor_json: editorJson,
+        html,
+      });
+
+      setSopId(response.sop_id);
+      setSaveMessage('Saved successfully!');
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      // Dynamic imports
+      const pdfMakeModule = await import('pdfmake/build/pdfmake');
+      const pdfFonts = await import('pdfmake/build/vfs_fonts');
+      // @ts-expect-error - html-to-pdfmake has no typescript definitions
+      const htmlToPdfmake = (await import('html-to-pdfmake')).default;
+      
+      // Access pdfMake from default export
+      const pdfMake = pdfMakeModule.default || pdfMakeModule;
+      
+      // Font helper function
+      const loadFont = async (url: string): Promise<string> => {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch font: ${url} - ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+      };
+
+      // Font configurations - add fonts as needed
+      const fontConfigs = {
+        TimesNewRoman: {
+          paths: {
+            normal: '/fonts/times-new-roman/Times New Roman.ttf',
+            bold: '/fonts/times-new-roman/Times New Roman - Bold.ttf',
+            italics: '/fonts/times-new-roman/Times New Roman - Italic.ttf',
+            bolditalics: '/fonts/times-new-roman/Times New Roman - Bold Italic.ttf',
+          },
+          vfsNames: {
+            normal: 'TimesNewRoman.ttf',
+            bold: 'TimesNewRoman-Bold.ttf',
+            italics: 'TimesNewRoman-Italic.ttf',
+            bolditalics: 'TimesNewRoman-BoldItalic.ttf',
+          }
+        },
+        Arial: {
+          paths: {
+            normal: '/fonts/arial-font/arial.ttf',
+            bold: '/fonts/arial-font/G_ari_bd.TTF',
+            italics: '/fonts/arial-font/G_ari_i.TTF',
+            bolditalics: '/fonts/arial-font/ARIBL0.ttf',
+          },
+          vfsNames: {
+            normal: 'Arial.ttf',
+            bold: 'Arial-Bold.ttf',
+            italics: 'Arial-Italic.ttf',
+            bolditalics: 'Arial-BoldItalic.ttf',
+          }
+        },
+        Gelasio: {
+          paths: {
+            normal: '/fonts/Gelasio/static/Gelasio-Regular.ttf',
+            bold: '/fonts/Gelasio/static/Gelasio-Bold.ttf',
+            italics: '/fonts/Gelasio/static/Gelasio-Italic.ttf',
+            bolditalics: '/fonts/Gelasio/static/Gelasio-BoldItalic.ttf',
+          },
+          vfsNames: {
+            normal: 'Gelasio.ttf',
+            bold: 'Gelasio-Bold.ttf',
+            italics: 'Gelasio-Italic.ttf',
+            bolditalics: 'Gelasio-BoldItalic.ttf',
+          }
+        },
+        Inter: {
+          paths: {
+            normal: '/fonts/Inter/static/Inter_18pt-Regular.ttf',
+            bold: '/fonts/Inter/static/Inter_18pt-Bold.ttf',
+            italics: '/fonts/Inter/static/Inter_18pt-Italic.ttf',
+            bolditalics: '/fonts/Inter/static/Inter_18pt-BoldItalic.ttf',
+          },
+          vfsNames: {
+            normal: 'Inter.ttf',
+            bold: 'Inter-Bold.ttf',
+            italics: 'Inter-Italic.ttf',
+            bolditalics: 'Inter-BoldItalic.ttf',
+          }
+        },
+        Merriweather: {
+          paths: {
+            normal: '/fonts/Merriweather/static/Merriweather_24pt-Regular.ttf',
+            bold: '/fonts/Merriweather/static/Merriweather_24pt-Bold.ttf',
+            italics: '/fonts/Merriweather/static/Merriweather_24pt-Italic.ttf',
+            bolditalics: '/fonts/Merriweather/static/Merriweather_24pt-BoldItalic.ttf',
+          },
+          vfsNames: {
+            normal: 'Merriweather.ttf',
+            bold: 'Merriweather-Bold.ttf',
+            italics: 'Merriweather-Italic.ttf',
+            bolditalics: 'Merriweather-BoldItalic.ttf',
+          }
+        },
+      };
+
+      // Load all fonts
+      console.log('Loading fonts...');
+      const vfs: Record<string, string> = { ...pdfFonts.vfs };
+      const fonts: Record<string, { normal: string; bold: string; italics: string; bolditalics: string }> = {
+        Roboto: {
+          normal: 'Roboto-Regular.ttf',
+          bold: 'Roboto-Medium.ttf',
+          italics: 'Roboto-Italic.ttf',
+          bolditalics: 'Roboto-MediumItalic.ttf'
+        }
+      };
+
+      for (const [fontName, config] of Object.entries(fontConfigs)) {
+        const [normal, bold, italics, bolditalics] = await Promise.all([
+          loadFont(config.paths.normal),
+          loadFont(config.paths.bold),
+          loadFont(config.paths.italics),
+          loadFont(config.paths.bolditalics),
+        ]);
+
+        vfs[config.vfsNames.normal] = normal;
+        vfs[config.vfsNames.bold] = bold;
+        vfs[config.vfsNames.italics] = italics;
+        vfs[config.vfsNames.bolditalics] = bolditalics;
+
+        fonts[fontName] = {
+          normal: config.vfsNames.normal,
+          bold: config.vfsNames.bold,
+          italics: config.vfsNames.italics,
+          bolditalics: config.vfsNames.bolditalics,
+        };
+      }
+      console.log('All fonts loaded successfully');
+
+      // Get HTML content
+      const html = editorRef.current?.getHTML();
+      if (!html) {
+        alert('No content to download.');
+        return;
+      }
+
+      // Convert HTML to pdfmake format
+      const ret = htmlToPdfmake(html);
+
+      // Detect font from HTML content (default to Times New Roman)
+      let selectedFont = 'TimesNewRoman';
+      if (html.includes('font-family: Arial')) selectedFont = 'Arial';
+      else if (html.includes('font-family: Gelasio')) selectedFont = 'Gelasio';
+      else if (html.includes('font-family: Inter')) selectedFont = 'Inter';
+      else if (html.includes('font-family: Merriweather')) selectedFont = 'Merriweather';
+
+      // Create PDF document definition
+      const docDefinition = {
+        content: ret,
+        pageSize: 'LETTER' as const,
+        pageMargins: [72, 72, 72, 72] as [number, number, number, number], // 1 inch = 72 points
+        defaultStyle: {
+          font: selectedFont,
+          fontSize: 12,
+          lineHeight: 1.5,
+          alignment: 'justify' as const,
+        },
+        styles: {
+          h1: {
+            fontSize: 16,
+            bold: true,
+            alignment: 'center' as const,
+            margin: [0, 0, 0, 18] as [number, number, number, number],
+          },
+          h2: {
+            fontSize: 14,
+            bold: true,
+            margin: [0, 14, 0, 8] as [number, number, number, number],
+          },
+          h3: {
+            fontSize: 12,
+            bold: true,
+            margin: [0, 12, 0, 6] as [number, number, number, number],
+          },
+          p: {
+            margin: [0, 0, 0, 12] as [number, number, number, number],
+          },
+        },
+      };
+
+      // Generate and download PDF
+      const pdfDocGenerator = pdfMake.createPdf(docDefinition, undefined, fonts, vfs);
+      pdfDocGenerator.download('statement-of-purpose.pdf');
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+      alert('Failed to generate PDF. Please try again.');
+    }
+  };
+
+
+
+
+  // Auto-save once right after initial generation
+  useEffect(() => {
+    const doAutoSave = async () => {
+      try {
+        if (!hasGenerated || hasAutoSaved || sopId) return;
+        const json = editorRef.current?.getJSON() || generatedContent;
+        if (!json) return;
+        const html = editorRef.current?.getHTML() || jsonToHtmlWithMarkdown(json);
+        const title = extractTitleFromEditorJSON(json) || 'My Statement of Purpose';
+
+        const response = await saveSOP({
+          sop_id: undefined,
+          title,
+          editor_json: json,
+          html,
+        });
+
+        setSopId(response.sop_id);
+        setActiveSOPId(response.sop_id);
+        setHasAutoSaved(true);
+        // refresh list
+        const summaries = await listSOPs(20);
+        setExistingSOPs(summaries);
+        setSaveMessage('Auto-saved');
+        setTimeout(() => setSaveMessage(null), 2500);
+      } catch (e) {
+        console.error('Auto-save failed', e);
+      }
+    };
+    void doAutoSave();
+  }, [hasGenerated, hasAutoSaved, sopId, generatedContent]);
+
+  const handleDelete = async () => {
+    if (!sopId) return;
+    const ok = window.confirm('Delete this SOP? This action cannot be undone.');
+    if (!ok) return;
+    try {
+      await deleteSOP(sopId);
+      // Refresh list and reset view
+      const summaries = await listSOPs(20);
+      setExistingSOPs(summaries);
+      setSopId(null);
+      setActiveSOPId(null);
+      setGeneratedContent(null);
+      setHasGenerated(false);
+    } catch (e) {
+      console.error('Failed to delete SOP', e);
+      setSaveMessage(e instanceof Error ? e.message : 'Delete failed');
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+  };
+
+  return (
+    <DashboardLayout>
+      {isGenerating ? (
+        // Generating Phase: Loading State
+        <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+          <div className="text-center space-y-4">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            <h2 className="text-2xl font-semibold">Generating Your SOP...</h2>
+            <p className="text-gray-600">AI is crafting your statement of purpose</p>
+          </div>
+        </div>
+      ) : !hasGenerated ? (
+        // Initial View: Form Only
+        <div className="max-w-7xl mx-auto p-6 lg:p-8">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">AI SOP Generator</h1>
+            <p className="text-gray-600 text-lg">
+              Create compelling Statements of Purpose that tell your unique story and stand out.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            {/* Upload Section */}
+            <div className="lg:col-span-2">
+              <UploadPanel onFilesChange={handleFilesChange} />
+            </div>
+
+            {/* Form Section */}
+            <div className="lg:col-span-3">
+              <AIChat
+                editorRef={editorRef}
+                uploadedFileIds={uploadedFileIds}
+                onGenerationStart={handleGenerationStart}
+                onSOPGenerated={handleSOPGenerated}
+                onGeneratedContent={handleGeneratedContent}
+                isGenerating={false}
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Generated View: Resizable AI Chat | Editor
+        <div className="h-[calc(100vh-4rem)]">
+          {/* Header */}
+          <div className="bg-white border-b px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleBackToForm}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+                <div>
+                  <h2 className="text-lg font-semibold">Statement of Purpose</h2>
+                  <p className="text-xs text-gray-500">AI-powered editor</p>
+                </div>
+              </div>
+              <div className="flex gap-2 items-center">
+                {existingSOPs.length > 0 && (
+                  <select
+                    className="text-sm border rounded px-2 py-1"
+                    value={activeSOPId || ''}
+                    onChange={(e) => handleSelectExisting(e.target.value)}
+                  >
+                    <option value="" disabled>My SOPs</option>
+                    {existingSOPs.map(s => (
+                      <option key={s.id} value={s.id}>{s.title || 'Untitled'}</option>
+                    ))}
+                  </select>
+                )}
+                <Button variant="outline" size="sm" onClick={handleNewSOP} disabled={isGenerating}>New</Button>
+                {saveMessage && (
+                  <span className="text-sm text-green-600 self-center mr-2">
+                    {saveMessage}
+                  </span>
+                )}
+                <Button variant="outline" size="sm" onClick={handleDownload}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleDelete} disabled={!sopId}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Resizable Layout */}
+          <ResizablePanelGroup direction="horizontal" className="h-[calc(100%-4rem)]">
+            {/* AI Chat Panel */}
+            <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+              <div className="h-full overflow-hidden bg-gray-50">
+                <AIChat
+                  editorRef={editorRef}
+                  uploadedFileIds={uploadedFileIds}
+                  onGenerationStart={handleGenerationStart}
+                  onSOPGenerated={handleSOPGenerated}
+                  onGeneratedContent={handleGeneratedContent}
+                  isGenerating={true}
+                />
+              </div>
+            </ResizablePanel>
+
+            <ResizableHandle withHandle />
+
+            {/* Editor Panel */}
+            <ResizablePanel defaultSize={70} minSize={50}>
+              <div className="h-full overflow-auto bg-white relative">
+                <Editor ref={editorRef} initialContent={generatedContent || undefined} />
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}
+
+/**
+ * Title extractor from TipTap JSON (first H1)
+ */
+type TipTapNode = { type: string; attrs?: { level?: number }; content?: TipTapNode[]; text?: string };
+
+function extractTitleFromEditorJSON(json: Record<string, unknown>): string | null {
+  const content = (json as { content?: TipTapNode[] }).content;
+  if (!content || content.length === 0) return null;
+  const firstHeading = content.find(
+    (node) => node?.type === 'heading' && node?.attrs?.level === 1
+  );
+  if (!firstHeading) return null;
+  const nodes = firstHeading.content || [];
+  const text = nodes
+    .filter((n) => n.type === 'text')
+    .map((n) => n.text || '')
+    .join('');
+  return text || null;
+}
+
+// Convert legacy HTML or plain text with markdown markers to proper HTML
+function convertMarkdownBoldToHtml(input: string): string {
+  // simple replacements for **bold** and *italic* within paragraphs
+  let out = input;
+  // Replace bold first
+  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Then italic (single *)
+  out = out.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+  // Replace __bold__ and _italic_
+  out = out.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  out = out.replace(/(^|[^_])_([^_]+)_(?!_)/g, '$1<em>$2</em>');
+  return out;
+}
+
+// Build HTML from TipTap JSON and convert markdown markers
+function jsonToHtmlWithMarkdown(json: Record<string, unknown>): string {
+  const nodes = (json as { content?: TipTapNode[] }).content || [];
+  const parts: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'heading' && node.attrs?.level === 1) {
+      const text = (node.content || []).map(n => n.text || '').join('');
+      parts.push(`<h1>${text}</h1>`);
+    } else if (node.type === 'paragraph') {
+      const text = (node.content || []).map(n => n.text || '').join('');
+      parts.push(`<p>${convertMarkdownBoldToHtml(text)}</p>`);
+    }
+    // ignore other nodes (e.g., old H2 headings)
+  }
+  return parts.join('\n');
+}

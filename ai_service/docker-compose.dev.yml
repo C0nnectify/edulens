@@ -1,0 +1,27 @@
+version: '3.8'
+
+# Development override for docker-compose
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  api:
+    volumes:
+      - .:/app  # Mount entire directory for hot reload
+    environment:
+      - DEBUG=True
+      - API_RELOAD=True
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+    command: celery -A app.core.celery_app:celery_app worker --loglevel=debug --concurrency=2
+
+  celery_beat:
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+    command: celery -A app.core.celery_app:celery_app beat --loglevel=debug

@@ -1,0 +1,66 @@
+{
+  "search_parameters": {
+    "programs": [
+      "Computer Science",
+      "Computer Engineering",
+      "Data Science",
+      "Artificial Intelligence",
+      "Machine Learning",
+      "Software Engineering",
+      "Electrical Engineering",
+      "Mechanical Engineering",
+      "Business Administration",
+      "MBA",
+      "Finance",
+      "Marketing"
+    ],
+    "degree_types": ["PhD", "MS", "MA", "MBA"],
+    "years": {
+      "start": 2020,
+      "end": 2025
+    },
+    "seasons": ["Fall", "Spring", "Winter"],
+    "top_universities": [
+      "MIT",
+      "Stanford",
+      "Harvard",
+      "Berkeley",
+      "CMU",
+      "Princeton",
+      "Yale",
+      "Columbia",
+      "Cornell",
+      "University of Pennsylvania",
+      "UCLA",
+      "USC",
+      "University of Michigan",
+      "University of Washington",
+      "Georgia Tech",
+      "UT Austin",
+      "UIUC",
+      "University of Wisconsin",
+      "Duke",
+      "Northwestern"
+    ]
+  },
+  "scraping_settings": {
+    "rate_limit_delay": 2.0,
+    "max_concurrent_requests": 3,
+    "retry_attempts": 3,
+    "retry_delay": 5,
+    "page_timeout": 30000,
+    "max_pages_per_search": 100,
+    "checkpoint_frequency": 50,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  },
+  "mongodb": {
+    "uri": "mongodb://localhost:27017",
+    "database": "edulens",
+    "collection": "gradcafe_data"
+  },
+  "output": {
+    "json_output_dir": "./train_ml/data/gradcafe",
+    "checkpoint_file": "./train_ml/checkpoints/gradcafe_checkpoint.json",
+    "log_file": "./train_ml/logs/gradcafe_scraper.log"
+  }
+}
