@@ -94,9 +94,14 @@ export default function DocumentBuilderPage() {
   ];
 
   const allDocuments = [
-    ...documents.sops.map(doc => ({ ...doc, type: 'sop' as const })),
-    ...documents.lors.map(doc => ({ ...doc, type: 'lor' as const })),
-  ].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    ...documents.sops.map((doc) => ({ ...doc, type: 'sop' as const })),
+    ...documents.lors.map((doc) => ({ ...doc, type: 'lor' as const })),
+  ]
+    // De-duplicate by id + type in case the API returns overlaps
+    .filter((doc, index, self) =>
+      index === self.findIndex((d) => d.id === doc.id && d.type === doc.type),
+    )
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
   return (
     <DashboardLayout>
@@ -169,7 +174,7 @@ export default function DocumentBuilderPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {allDocuments.map((doc) => (
-                  <Card key={doc.id} className="group hover:shadow-lg transition-all duration-200 border border-gray-200">
+                  <Card key={`${doc.type}-${doc.id}`} className="group hover:shadow-lg transition-all duration-200 border border-gray-200">
                     <Link 
                       href={doc.type === 'sop' 
                         ? `/dashboard/document-builder/sop-generator?id=${doc.id}` 

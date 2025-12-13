@@ -24,6 +24,7 @@ export default function LORGeneratorPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const docIdFromUrl = searchParams?.get('id');
+  const draftKeyFromUrl = searchParams?.get('draftKey');
   const editorRef = useRef<EditorHandle>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -227,7 +228,7 @@ export default function LORGeneratorPage() {
     void doAutoSave();
   }, [hasGenerated, hasAutoSaved, lorId, studentName]);
 
-  // Load existing LORs; only auto-load if ID is in URL
+  // Load existing LORs; only auto-load if ID or draftKey is in URL
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -236,25 +237,57 @@ export default function LORGeneratorPage() {
         if (!mounted) return;
         setExistingLORs(items);
         
-        // Only load document if ID is explicitly provided in URL
-        if (docIdFromUrl && !hasGenerated) {
-          const doc = await getSOP(docIdFromUrl);
-          if (!mounted) return;
-          if (doc.editor_json) {
-            setInitialEditorContent(doc.editor_json as Record<string, unknown>);
+        // Only load document if ID or draftKey is explicitly provided in URL
+        if (!hasGenerated) {
+          if (docIdFromUrl) {
+            const doc = await getSOP(docIdFromUrl);
+            if (!mounted) return;
+            if (doc.editor_json) {
+              setInitialEditorContent(doc.editor_json as Record<string, unknown>);
+            }
+            const fallbackHtml = doc.editor_json
+              ? jsonToHtmlWithMarkdown(doc.editor_json as Record<string, unknown>)
+              : '';
+            const htmlSource = doc.html && doc.html.trim().length > 0
+              ? doc.html
+              : fallbackHtml;
+            if (htmlSource) {
+              editorRef.current?.setContent(normalizeEditorHtml(htmlSource));
+            }
+            setLorId(doc.id);
+            setActiveLORId(doc.id);
+            setHasGenerated(true);
+          } else if (draftKeyFromUrl && typeof window !== 'undefined') {
+            // If a draftKey is provided (from Document Builder chat), load draft
+            // content from localStorage and initialize the editor with it.
+            try {
+              const stored = window.localStorage.getItem(draftKeyFromUrl);
+              if (stored) {
+                const parsed = JSON.parse(stored) as {
+                  documentType?: string | null;
+                  documentDraft?: { editor_json?: Record<string, unknown>; html?: string };
+                };
+                if (!parsed.documentType || parsed.documentType === 'lor') {
+                  const draft = parsed.documentDraft || (parsed as unknown as { editor_json?: Record<string, unknown> });
+                  if (draft && draft.editor_json) {
+                    setInitialEditorContent(draft.editor_json as Record<string, unknown>);
+                    const fallbackHtml = jsonToHtmlWithMarkdown(draft.editor_json as Record<string, unknown>);
+                    const htmlSource = draft.html && draft.html.trim().length > 0
+                      ? draft.html
+                      : fallbackHtml;
+                    if (htmlSource) {
+                      editorRef.current?.setContent(normalizeEditorHtml(htmlSource));
+                    }
+                    setLorId(null);
+                    setActiveLORId(null);
+                    setHasGenerated(true);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('Failed to load LOR draft from localStorage', err);
+            }
           }
-          const fallbackHtml = doc.editor_json
-            ? jsonToHtmlWithMarkdown(doc.editor_json as Record<string, unknown>)
-            : '';
-          const htmlSource = doc.html && doc.html.trim().length > 0
-            ? doc.html
-            : fallbackHtml;
-          if (htmlSource) {
-            editorRef.current?.setContent(normalizeEditorHtml(htmlSource));
-          }
-          setLorId(doc.id);
-          setActiveLORId(doc.id);
-          setHasGenerated(true);
         }
         // Otherwise, show the create form (don't auto-load)
       } catch (e) {

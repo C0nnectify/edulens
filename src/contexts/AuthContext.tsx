@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (result.data) {
-        router.push('/dashboard');
+        router.push('/new-dashboard');
         return true;
       }
       return false;
@@ -65,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (result.data) {
-        router.push('/dashboard');
+        router.push('/new-dashboard');
         return true;
       }
       return false;

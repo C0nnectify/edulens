@@ -348,14 +348,27 @@ async def get_sop(
 async def list_sops(limit: int = 10, doc_type: Optional[str] = None, user_id: str = Depends(verify_user)):
     """List SOP/LOR documents for current user (most recent first).
 
-    Optionally filter by metadata.doc_type (e.g., 'lor' or 'sop').
+    When ``doc_type`` is provided, we filter primarily via ``metadata.doc_type``.
+    For backward compatibility, when ``doc_type == 'sop'`` we also include legacy
+    documents that have no ``metadata.doc_type`` set at all (these were the
+    original SOPs before typed documents were introduced).
     """
     try:
         collection = db_client.get_sop_collection()
-        base_filter = {"user_id": user_id}
+        base_filter: dict = {"user_id": user_id}
+
         if doc_type:
-            # Filter documents that have matching metadata.doc_type
-            base_filter["metadata.doc_type"] = doc_type
+            if doc_type == "sop":
+                # Treat documents with no explicit doc_type as SOPs so that
+                # older SOPs continue to appear in listings.
+                base_filter["$or"] = [
+                    {"metadata.doc_type": {"$exists": False}},
+                    {"metadata.doc_type": "sop"},
+                ]
+            else:
+                # For LOR and any other future types, require an exact match.
+                base_filter["metadata.doc_type"] = doc_type
+
         cursor = collection.find(base_filter).sort("updated_at", -1).limit(limit)
         items: List[SOPSummary] = []
         for doc in cursor:

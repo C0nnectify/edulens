@@ -20,7 +20,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check for protected dashboard routes
-  if (pathname.startsWith('/dashboard')) {
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/new-dashboard')) {
     // Check for better-auth session cookie (edge-runtime compatible)
     const sessionCookie = request.cookies.get('better-auth.session_token');
 

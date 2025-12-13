@@ -27,7 +27,7 @@ export default function SignUpPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (session?.user) {
-      router.push('/dashboard');
+      router.push('/new-dashboard');
     }
   }, [session, router]);
 
@@ -68,7 +68,7 @@ export default function SignUpPage() {
       if (result.error) {
         setError(result.error.message || 'Failed to create account. Email may already be in use.');
       } else {
-        router.push('/dashboard');
+        router.push('/new-dashboard');
         router.refresh();
       }
     } catch (err) {

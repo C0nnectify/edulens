@@ -95,6 +95,7 @@ dependencies = [
     "loguru==0.7.2",
     "langchain-google-genai>=2.0.10",
     "reportlab>=4.4.4",
+    "langchain-groq>=0.2.0",
 ]
 
 [project.optional-dependencies]

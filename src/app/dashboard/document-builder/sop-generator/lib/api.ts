@@ -301,22 +301,14 @@ export async function getSOP(sopId: string): Promise<SOPDocument> {
 }
 
 /**
- * List SOPs for current user
+ * List SOPs for current user (doc_type = 'sop')
+ *
+ * Previously this endpoint fetched all documents without filtering by type,
+ * which could cause LOR documents to appear in both the SOP and LOR lists
+ * and lead to duplicate entries in the Document Builder UI.
  */
 export async function listSOPs(limit: number = 10): Promise<SOPSummary[]> {
-  const response = await fetch(`${API_BASE_URL}/api/sop?limit=${limit}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Failed to list SOPs' }));
-    throw new Error(error.detail || 'Failed to list SOPs');
-  }
-
-  return response.json();
+  return listDocumentsByType('sop', limit);
 }
 
 /**

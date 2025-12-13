@@ -19,6 +19,7 @@ import { saveSOP, listSOPs, getSOP, deleteSOP, SOPSummary } from './lib/api';
 export default function SOPGeneratorPage() {
   const searchParams = useSearchParams();
   const docIdFromUrl = searchParams?.get('id');
+  const draftKeyFromUrl = searchParams?.get('draftKey');
   const editorRef = useRef<EditorHandle>(null);
   const [uploadedFileIds, setUploadedFileIds] = useState<string[]>([]);
   const [sopId, setSopId] = useState<string | null>(null);
@@ -48,6 +49,27 @@ export default function SOPGeneratorPage() {
           setSopId(doc.id);
           setActiveSOPId(doc.id);
           setHasGenerated(true);
+        } else if (draftKeyFromUrl && typeof window !== 'undefined') {
+          // If a draftKey is provided (from Document Builder chat), load draft
+          // content from localStorage and initialize the editor with it.
+          try {
+            const stored = window.localStorage.getItem(draftKeyFromUrl);
+            if (stored) {
+              const parsed = JSON.parse(stored) as {
+                documentType?: string | null;
+                documentDraft?: { editor_json?: Record<string, unknown>; html?: string };
+              };
+              const draft = parsed.documentDraft || (parsed as unknown as { editor_json?: Record<string, unknown> });
+              if (draft && draft.editor_json) {
+                setGeneratedContent(draft.editor_json as Record<string, unknown>);
+                setSopId(null);
+                setActiveSOPId(null);
+                setHasGenerated(true);
+              }
+            }
+          } catch (err) {
+            console.error('Failed to load draft from localStorage', err);
+          }
         }
         // Otherwise, show the create form (don't auto-load)
       } catch (e) {
@@ -55,7 +77,7 @@ export default function SOPGeneratorPage() {
       }
     })();
     return () => { mounted = false; };
-  }, [docIdFromUrl]);
+  }, [docIdFromUrl, draftKeyFromUrl]);
 
   const handleSelectExisting = async (id: string) => {
     try {
@@ -123,6 +145,7 @@ export default function SOPGeneratorPage() {
         title,
         editor_json: editorJson,
         html,
+        metadata: { doc_type: 'sop' },
       });
 
       setSopId(response.sop_id);
@@ -349,6 +372,7 @@ export default function SOPGeneratorPage() {
           title,
           editor_json: json,
           html,
+          metadata: { doc_type: 'sop' },
         });
 
         setSopId(response.sop_id);

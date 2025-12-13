@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     google_api_key: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
     google_model: str = Field(default="gemini-2.5-flash", env="GOOGLE_MODEL")
 
+    # GROQ (Sanity) Configuration
+    groq_api_key: Optional[str] = Field(default=None, env="GROQ_API_KEY")
+
     # SMTP Email Configuration
     smtp_host: str = Field(default="smtp.gmail.com", env="SMTP_HOST")
     smtp_port: int = Field(default=587, env="SMTP_PORT")
