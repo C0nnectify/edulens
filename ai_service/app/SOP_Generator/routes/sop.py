@@ -24,22 +24,31 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # Auth helper (stub for MVP - replace with actual auth)
-def verify_user(authorization: Optional[str] = Header(None)) -> str:
+def verify_user(
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None, alias="x-user-id"),
+) -> str:
     """
     Verify JWT token and return user_id
     Stub implementation for MVP - replace with actual JWT verification
     """
+    # Prefer explicit x-user-id header when available so that
+    # SOP uploads share the same per-user identity as the rest of
+    # the AI service (document builder chat, Document AI, etc.).
+    if x_user_id and x_user_id.strip():
+        return x_user_id.strip()
+
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header required")
-    
+
     # TODO: Implement real JWT verification
     # For now, extract user_id from token or use mock
     token = authorization.replace("Bearer ", "")
-    
+
     # Mock: return test user ID
     if token == "test_token" or len(token) > 10:
         return "test_user_123"
-    
+
     raise HTTPException(status_code=401, detail="Invalid token")
 
 

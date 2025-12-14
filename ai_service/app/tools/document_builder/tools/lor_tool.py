@@ -8,7 +8,6 @@ Handles information collection from recommender perspective and LOR generation.
 import json
 import uuid
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -19,7 +18,6 @@ from ..state import (
     DocumentBuilderState,
     DocumentType,
     LORCollectedData,
-    LORStrength,
     GeneratedDocument,
     DocumentSection,
     LOR_REQUIRED_FIELDS,
@@ -35,39 +33,40 @@ logger = logging.getLogger(__name__)
 
 
 # Field to question topic mapping for natural conversation
-FIELD_TO_TOPIC = {
+FIELD_TO_TOPIC: Dict[str, str] = {
+    # Recommender details
     "recommender_name": "recommender_info",
     "recommender_title": "recommender_info",
     "recommender_organization": "recommender_info",
     "relationship": "recommender_info",
     "association_duration": "recommender_info",
+    # Student and target program details
     "student_name": "student_info",
     "student_role": "student_info",
     "target_program": "student_info",
     "target_university": "student_info",
+    "target_country": "student_info",
+    # Observations and comparison
     "skills_observed": "observations",
     "achievements": "observations",
     "character_traits": "observations",
     "specific_examples": "observations",
+    "areas_of_growth": "comparison",
     "peer_comparison": "comparison",
+    # Strength/overall check
     "strength": "strength_level",
 }
 
 
 class LORTool(BaseDocumentTool):
-    """
-    Tool for creating Letters of Recommendation through conversation.
-    
-    Features:
-    - Support for recommender or student perspective
-    - Natural language information extraction
-    - Professional tone calibration
-    - Strength-appropriate language
-    """
+    """Tool for creating Letters of Recommendation through conversation."""
 
     def __init__(self, llm: ChatGoogleGenerativeAI):
         super().__init__(llm, DocumentType.LOR)
 
+    # ------------------------------------------------------------------
+    # Prompt accessors
+    # ------------------------------------------------------------------
     @property
     def system_prompt(self) -> str:
         return LOR_SYSTEM_PROMPT
@@ -87,23 +86,130 @@ class LORTool(BaseDocumentTool):
     def get_required_fields(self) -> Dict[str, List[str]]:
         return LOR_REQUIRED_FIELDS
 
+    # ------------------------------------------------------------------
+    # Attachment helpers
+    # ------------------------------------------------------------------
+    async def _get_attachment_text(self, state: DocumentBuilderState) -> str:
+        """Aggregate raw text from any uploaded attachments for this LOR session.
+
+        Supports both:
+        - Files stored via the SOP_Generator storage service
+        - Documents ingested through the central Document AI pipeline
+
+        The aggregated text is used as extra context when extracting
+        structured LOR information so we can infer things like the
+        student's name, target program/university, or achievements
+        directly from a CV or transcript before asking the user.
+        """
+        if not getattr(state, "attachments", None):
+            return ""
+
+        try:
+            from app.SOP_Generator.services import storage as storage_module
+            from app.SOP_Generator import db as db_module
+            from app.database.mongodb import get_documents_collection
+            from app.services import DocumentProcessor
+
+            db_client = db_module.DatabaseClient()
+            storage = storage_module.StorageService(db_client.get_files_collection())
+
+            docs_collection = get_documents_collection()
+            doc_processor = DocumentProcessor()
+
+            collected_chunks: List[str] = []
+            for file_id in state.attachments:
+                text: str = ""
+
+                # 1) Try new centralized UserFile collection (MongoDB + ChromaDB)
+                try:
+                    from app.database.mongodb import get_mongodb_client
+                    mongodb = await get_mongodb_client()
+                    user_files_collection = mongodb.get_database().user_files
+                    
+                    user_file = await user_files_collection.find_one({
+                        "fileId": file_id,
+                        "userId": state.user_id,
+                    })
+                    
+                    if user_file:
+                        logger.info(f"Found UserFile {file_id}: status={user_file.get('processingStatus')}, hasText={bool(user_file.get('extractedText'))}")
+                        if user_file.get("extractedText"):
+                            text = user_file["extractedText"]
+                            logger.info(f"Loaded {len(text)} chars from UserFile {file_id}")
+                        else:
+                            logger.warning(f"UserFile {file_id} found but no extractedText yet (status: {user_file.get('processingStatus')})")
+                    else:
+                        logger.debug(f"UserFile {file_id} not found in collection")
+                except Exception as e:
+                    logger.error(f"UserFile lookup failed for {file_id}: {e}")
+                    text = ""
+
+                # 2) Try SOP_Generator file store (legacy system)
+                if not text:
+                    try:
+                        text = storage.get_file_text(file_id, state.user_id) or ""
+                    except Exception:
+                        text = ""
+
+                # 3) If nothing found, fall back to Document AI documents
+                if not text:
+                    try:
+                        doc = await docs_collection.find_one(
+                            {"document_id": file_id, "user_id": state.user_id}
+                        )
+                        if doc and doc.get("file_path"):
+                            file_path = doc["file_path"]
+                            try:
+                                text, _ = await doc_processor.process_document(file_path)
+                            except Exception:
+                                text = ""
+                    except Exception:
+                        text = ""
+
+                if not text:
+                    continue
+
+                snippet = text.strip().replace("\n", " ")[:2000]
+                collected_chunks.append(snippet)
+
+            if not collected_chunks:
+                return ""
+
+            combined = "\n\n".join(collected_chunks)
+            return combined[:8000]
+
+        except Exception:
+            return ""
+
+    # ------------------------------------------------------------------
+    # Information extraction & state updates
+    # ------------------------------------------------------------------
     async def extract_info_from_message(
         self, message: str, state: DocumentBuilderState
     ) -> Dict[str, Any]:
-        """
-        Extract LOR-relevant information from user's message.
-        
+        """Extract LOR-relevant information from user's message.
+
         Extracts:
         - Recommender details
         - Student information
         - Relationship context
         - Observations and achievements
-        """
-        extraction_prompt = f"""
-Analyze the following message and extract any information relevant to a Letter of Recommendation.
 
-User Message:
-\"\"\"{message}\"\"\"
+        In addition to the user's message, this function also looks at any
+        uploaded attachments (CVs, transcripts, etc.) attached to the
+        current session so it can infer as much as possible before asking
+        follow-up questions.
+        """
+        attachment_context = await self._get_attachment_text(state)
+
+        extraction_prompt = f"""
+    Analyze the following message and extract any information relevant to a Letter of Recommendation.
+
+    User Message:
+    {message}
+
+    Attachment Context (from uploaded files, if any):
+    {attachment_context or "(no attachment text available)"}
 
 Current Context:
 - Current topic being discussed: {state.current_topic or "general"}
@@ -142,18 +248,22 @@ Return valid JSON only.
                 SystemMessage(content="You are an information extraction assistant. Extract structured data from text."),
                 HumanMessage(content=extraction_prompt),
             ])
-            
+
             extracted = self._extract_json(response.content)
-            
+
             # Handle skills_observed as list
             if "skills_observed" in extracted:
                 skills = extracted["skills_observed"]
                 if isinstance(skills, str):
                     extracted["skills_observed"] = [s.strip() for s in skills.split(",")]
-            
-            # Filter out null values
-            return {k: v for k, v in extracted.items() if v is not None and v != "" and v != []}
-            
+
+            # Filter out null/empty values
+            return {
+                k: v
+                for k, v in extracted.items()
+                if v is not None and v != "" and v != []
+            }
+
         except Exception as e:
             self.logger.error(f"Info extraction failed: {e}")
             return {}
@@ -164,7 +274,7 @@ Return valid JSON only.
         """Update the state's LOR data with extracted information."""
         if not state.lor_data:
             state.lor_data = LORCollectedData()
-        
+
         for field, value in extracted_info.items():
             if field == "perspective":
                 state.lor_data.perspective = value
@@ -173,30 +283,39 @@ Return valid JSON only.
                 if isinstance(value, list):
                     state.lor_data.skills_observed = list(set(current + value))
                 else:
-                    # If it's a string, treat as comma-separated
                     if isinstance(value, str):
                         new_skills = [s.strip() for s in value.split(",") if s.strip()]
                         state.lor_data.skills_observed = list(set(current + new_skills))
             else:
                 current_value = getattr(state.lor_data, field, None)
-                if current_value and isinstance(current_value, str) and isinstance(value, str):
+                if (
+                    current_value
+                    and isinstance(current_value, str)
+                    and isinstance(value, str)
+                ):
                     setattr(state.lor_data, field, f"{current_value}\n\n{value}")
                 else:
                     setattr(state.lor_data, field, value)
-        
+
         # Update completion percentage
         state.completion_percentage = state.lor_data.get_completion_percentage()
-        
+
         return state
 
+    # ------------------------------------------------------------------
+    # Question selection
+    # ------------------------------------------------------------------
     def get_next_question(
         self, state: DocumentBuilderState, topic: Optional[str] = None
     ) -> str:
         if topic is None and state.lor_data:
             # First check if we know the perspective
-            if not state.lor_data.perspective or state.lor_data.perspective == "unknown":
+            if (
+                not state.lor_data.perspective
+                or state.lor_data.perspective == "unknown"
+            ):
                 return self.collection_prompts.get("initial_greeting", "")
-            
+
             missing = state.lor_data.get_missing_critical_fields()
             if missing:
                 topic = missing[0]
@@ -204,17 +323,20 @@ Return valid JSON only.
                 missing = state.lor_data.get_missing_important_fields()
                 if missing:
                     topic = missing[0]
-        
+
         # Map field to conversation topic
         prompt_key = FIELD_TO_TOPIC.get(topic, topic)
-        
+
         if prompt_key in self.collection_prompts:
             template = self.collection_prompts[prompt_key]
             return self._fill_lor_context(template, state)
-        
-        # Fallback generic question
-        return f"Could you tell me about the {topic.replace('_', ' ')}?"
 
+        # Fallback generic question
+        return f"Could you tell me about the {str(topic).replace('_', ' ')}?"
+
+    # ------------------------------------------------------------------
+    # Formatting helpers
+    # ------------------------------------------------------------------
     def format_document_for_editor(self, document: GeneratedDocument) -> Dict[str, Any]:
         """Override base formatting to avoid per-section headings for LOR.
 
@@ -265,7 +387,7 @@ Return valid JSON only.
         """Fill LOR-specific context into template."""
         if not state.lor_data:
             return template
-        
+
         context = {
             "recommender_name": state.lor_data.recommender_name or "[recommender]",
             "recommender_title": state.lor_data.recommender_title or "",
@@ -274,42 +396,53 @@ Return valid JSON only.
             "duration": state.lor_data.association_duration or "the duration",
             "program": state.lor_data.target_program or "[target program]",
             "university": state.lor_data.target_university or "[target university]",
-            "strength": state.lor_data.strength.value if state.lor_data.strength else "strong",
-            "context": f" for {state.lor_data.target_program}" if state.lor_data.target_program else "",
+            "strength": state.lor_data.strength.value
+            if state.lor_data.strength
+            else "strong",
+            "context": f" for {state.lor_data.target_program}"
+            if state.lor_data.target_program
+            else "",
         }
-        
+
         # Build highlights summary for final check
-        highlights = []
+        highlights: List[str] = []
         if state.lor_data.skills_observed:
-            highlights.append(f"- Skills: {', '.join(state.lor_data.skills_observed[:5])}")
+            highlights.append(
+                f"- Skills: {', '.join(state.lor_data.skills_observed[:5])}"
+            )
         if state.lor_data.achievements:
-            highlights.append(f"- Achievements: {state.lor_data.achievements[:100]}...")
+            highlights.append(
+                f"- Achievements: {state.lor_data.achievements[:100]}..."
+            )
         if state.lor_data.character_traits:
-            highlights.append(f"- Character: {state.lor_data.character_traits[:100]}...")
-        context["highlights_summary"] = "\n".join(highlights) if highlights else "Key observations"
-        
+            highlights.append(
+                f"- Character: {state.lor_data.character_traits[:100]}..."
+            )
+        context["highlights_summary"] = (
+            "\n".join(highlights) if highlights else "Key observations"
+        )
+
         try:
             return template.format(**context)
         except KeyError as e:
             self.logger.debug(f"Missing template key: {e}")
             return template
 
+    # ------------------------------------------------------------------
+    # Generation and refinement
+    # ------------------------------------------------------------------
     async def generate_document(
         self, state: DocumentBuilderState
     ) -> GeneratedDocument:
-        """
-        Generate the LOR using collected data.
-        
-        Returns a structured GeneratedDocument with sections and metadata.
-        """
+        """Generate the LOR using collected data."""
         if not state.lor_data:
             raise ValueError("No LOR data collected")
-        
+
         data = state.lor_data
-        
+
         # Try to get style context from examples
         style_context = await self._get_style_context(data)
-        
+
         # Build generation data
         generation_data = {
             "recommender_name": data.recommender_name or "Not specified",
@@ -320,7 +453,9 @@ Return valid JSON only.
             "student_name": data.student_name or "the student",
             "student_role": data.student_role or "student",
             "supervision_duration": data.association_duration or "N/A",
-            "skills_observed": ", ".join(data.skills_observed) if data.skills_observed else "Not specified",
+            "skills_observed": ", ".join(data.skills_observed)
+            if data.skills_observed
+            else "Not specified",
             "achievements": data.achievements or "Not specified",
             "character_traits": data.character_traits or "Not specified",
             "peer_comparison": data.peer_comparison or "Not provided",
@@ -333,124 +468,173 @@ Return valid JSON only.
             "word_limit": data.word_limit or 800,
             "style_context": style_context,
         }
-        
+
         prompt = self.generation_prompt.format(**generation_data)
-        
+
         try:
             response = self._invoke_with_fallback([
                 SystemMessage(content=self.system_prompt),
                 HumanMessage(content=prompt),
             ])
-            
+
             result = self._extract_json(response.content)
-            
+
+            # --- Sanitize text to prevent invisible/control characters ---
+            def _sanitize(text: str) -> str:
+                if not isinstance(text, str):
+                    return text
+                # Remove zero-width and BOM characters and normalize spaces
+                bad_chars = [
+                    "\u200B",  # zero-width space
+                    "\u200C",  # zero-width non-joiner
+                    "\u200D",  # zero-width joiner
+                    "\uFEFF",  # BOM
+                ]
+                for ch in bad_chars:
+                    text = text.replace(ch, "")
+                # Replace non-breaking space with regular space
+                text = text.replace("\u00A0", " ")
+                # Remove other control characters except newline and tab
+                text = "".join(
+                    c for c in text
+                    if (ord(c) >= 32 or c in "\n\t")
+                )
+                # Collapse excess whitespace that may confuse renderers
+                return " ".join(text.split())
+
+            # Sanitize plain_text and sections
+            if "plain_text" in result and isinstance(result["plain_text"], str):
+                result["plain_text"] = _sanitize(result["plain_text"]) 
+
+            if "sections" in result and isinstance(result["sections"], list):
+                for s in result["sections"]:
+                    if isinstance(s, dict) and "content_markdown" in s and isinstance(s["content_markdown"], str):
+                        s["content_markdown"] = _sanitize(s["content_markdown"]) 
+
             # Build GeneratedDocument
             sections = [
                 DocumentSection(
                     heading=s.get("heading", "Section"),
-                    content_markdown=s.get("content_markdown", "")
+                    content_markdown=s.get("content_markdown", ""),
                 )
                 for s in result.get("sections", [])
             ]
-            
+
             document = GeneratedDocument(
                 document_id=str(uuid.uuid4()),
                 document_type=DocumentType.LOR,
-                title=result.get("title", f"Letter of Recommendation for {data.student_name}"),
+                title=result.get(
+                    "title",
+                    f"Letter of Recommendation for {data.student_name}",
+                ),
                 sections=sections,
                 plain_text=result.get("plain_text", ""),
                 word_count=result.get("word_count", 0),
                 target_program=data.target_program,
                 target_university=data.target_university,
             )
-            
-            # Add editor format
+
+            # Add editor and HTML formats
             document.editor_json = self.format_document_for_editor(document)
             document.html = self.sections_to_html(sections, document.title)
-            
+
             return document
-            
+
         except Exception as e:
             self.logger.error(f"LOR generation failed: {e}")
             raise
 
     async def _get_style_context(self, data: LORCollectedData) -> str:
-        """
-        Get style context from similar successful LORs using pre-stored embeddings.
-        
-        Uses multiple retrieval strategies:
-        1. Style profile aggregation (tone, structure, common phrases)
-        2. Example chunks retrieval using hybrid search (country + field filters)
-        """
-        style_parts = []
-        
+        """Get style context from similar successful LORs using embeddings."""
+        style_parts: List[str] = []
+
         # Build query from available data
-        query = f"{data.target_program or ''} {data.target_university or ''} {data.target_country or ''} recommendation letter".strip()
+        query = (
+            f"{data.target_program or ''} {data.target_university or ''} {data.target_country or ''} recommendation letter".strip()
+        )
         if not query or query == "recommendation letter":
             query = "graduate program letter of recommendation"
-        
+
         # 1. Get style profile (aggregated style features)
         try:
             from app.services.style_retrieval import get_style_profile
-            
+
             style_profile = get_style_profile("lor", query=query, k=8)
-            
+
             if style_profile and style_profile.get("source_chunks", 0) > 0:
                 style_parts.append("**Style Profile from Similar LORs:**")
-                style_parts.append(f"- Average sentence length: {style_profile.get('avg_sentence_length', 18)} words")
-                style_parts.append(f"- Average paragraph length: {style_profile.get('avg_paragraph_length', 120)} words")
-                
+                style_parts.append(
+                    f"- Average sentence length: {style_profile.get('avg_sentence_length', 18)} words"
+                )
+                style_parts.append(
+                    f"- Average paragraph length: {style_profile.get('avg_paragraph_length', 120)} words"
+                )
+
                 if style_profile.get("common_headings"):
-                    style_parts.append(f"- Common section structure: {', '.join(style_profile['common_headings'][:5])}")
-                
+                    style_parts.append(
+                        f"- Common section structure: {', '.join(style_profile['common_headings'][:5])}"
+                    )
+
                 if style_profile.get("opening_phrases"):
-                    style_parts.append(f"- Effective opening phrases: {', '.join(style_profile['opening_phrases'][:3])}")
-                
+                    style_parts.append(
+                        f"- Effective opening phrases: {', '.join(style_profile['opening_phrases'][:3])}"
+                    )
+
                 if style_profile.get("closing_phrases"):
-                    style_parts.append(f"- Strong closing phrases: {', '.join(style_profile['closing_phrases'][:3])}")
-                
+                    style_parts.append(
+                        f"- Strong closing phrases: {', '.join(style_profile['closing_phrases'][:3])}"
+                    )
+
                 if style_profile.get("tone_indicators"):
-                    style_parts.append(f"- Tone indicators to use: {', '.join(style_profile['tone_indicators'][:5])}")
-                
+                    style_parts.append(
+                        f"- Tone indicators to use: {', '.join(style_profile['tone_indicators'][:5])}"
+                    )
+
                 if style_profile.get("recommended_structure"):
-                    style_parts.append(f"- Recommended structure: {' → '.join(style_profile['recommended_structure'])}")
-                
-                self.logger.info(f"Retrieved style profile from {style_profile.get('source_chunks', 0)} example chunks")
-                
+                    style_parts.append(
+                        f"- Recommended structure: {' → '.join(style_profile['recommended_structure'])}"
+                    )
+
+                self.logger.info(
+                    f"Retrieved style profile from {style_profile.get('source_chunks', 0)} example chunks"
+                )
+
         except ImportError:
             self.logger.debug("Style retrieval service not available")
         except Exception as e:
             self.logger.warning(f"Failed to get style profile: {e}")
-        
+
         # 2. Get specific example chunks using hybrid retrieval
         try:
             from app.SOP_Generator.db import get_lor_style_context
-            
+
             example_chunks = get_lor_style_context(
                 country=(data.target_country or "").lower() or None,
                 subject=(data.target_program or "").lower() or None,
                 collection_name="lor_examples",
             )
-            
+
             if example_chunks:
                 style_parts.append("\n**Example Excerpts from Similar LORs:**")
                 for i, chunk in enumerate(example_chunks[:3], 1):
                     preview = chunk.get("text_preview", "")[:300]
                     if preview:
                         style_parts.append(f"{i}. \"{preview}...\"")
-                
-                self.logger.info(f"Retrieved {len(example_chunks)} example chunks for style context")
-                
+
+                self.logger.info(
+                    f"Retrieved {len(example_chunks)} example chunks for style context"
+                )
+
         except ImportError:
             self.logger.debug("SOP_Generator db module not available")
         except Exception as e:
             self.logger.warning(f"Failed to get example chunks: {e}")
-        
+
         # 3. Fallback to basic retrieval if hybrid failed
         if not style_parts:
             try:
                 from app.SOP_Generator.db import get_relevant_chunks
-                
+
                 chunks = get_relevant_chunks(query, k=5, collection_name="lor_examples")
                 if chunks:
                     style_parts.append("**Reference Examples:**")
@@ -458,37 +642,35 @@ Return valid JSON only.
                         preview = chunk.get("text_preview", "")[:250]
                         if preview:
                             style_parts.append(f"- \"{preview}...\"")
-                            
+
             except Exception as e:
                 self.logger.debug(f"Basic retrieval also failed: {e}")
-        
+
         if style_parts:
             return "\n".join(style_parts)
-        
+
         return "No style context available - use general best practices for LORs."
 
     async def refine_section(
         self,
         state: DocumentBuilderState,
         section_heading: str,
-        feedback: str
+        feedback: str,
     ) -> DocumentSection:
-        """
-        Refine a specific section based on user feedback.
-        """
+        """Refine a specific section based on user feedback."""
         if not state.draft:
             raise ValueError("No draft to refine")
-        
+
         # Find the section
-        current_section = None
+        current_section: Optional[DocumentSection] = None
         for section in state.draft.sections:
             if section.heading.lower() == section_heading.lower():
                 current_section = section
                 break
-        
+
         if not current_section:
             raise ValueError(f"Section '{section_heading}' not found in draft")
-        
+
         refinement_prompt = f"""
 Refine this Letter of Recommendation section based on user feedback.
 
@@ -511,70 +693,84 @@ Refine this Letter of Recommendation section based on user feedback.
 
 Return only the refined section content (no JSON, no heading).
 """
-        
+
         try:
             response = self._invoke_with_fallback([
                 SystemMessage(content=self.system_prompt),
                 HumanMessage(content=refinement_prompt),
             ])
-            
+
             refined_content = response.content.strip()
-            
+
             return DocumentSection(
                 heading=current_section.heading,
-                content_markdown=refined_content
+                content_markdown=refined_content,
             )
-            
+
         except Exception as e:
             self.logger.error(f"Section refinement failed: {e}")
             raise
 
     def get_generation_summary(self, document: GeneratedDocument) -> str:
-        """
-        Generate a summary to present with the draft.
-        """
+        """Generate a summary to present with the draft."""
         summary_parts = [
             f"**{document.title}**\n",
-            f"📝 Word Count: {document.word_count} words\n",
-            f"📚 Sections: {len(document.sections)}\n",
+            f"��� Word Count: {document.word_count} words\n",
+            f"��� Sections: {len(document.sections)}\n",
         ]
-        
+
         summary_parts.append("\n**Sections:**")
         for section in document.sections:
             summary_parts.append(f"  • {section.heading}")
-        
+
         summary_parts.append("\n\n**What would you like to do?**")
         summary_parts.append("1. Review and edit in the document editor")
         summary_parts.append("2. Adjust the recommendation strength")
         summary_parts.append("3. Add more specific examples")
         summary_parts.append("4. Save and export")
-        
+
         return "\n".join(summary_parts)
 
+    # ------------------------------------------------------------------
+    # Utility
+    # ------------------------------------------------------------------
     def determine_perspective(self, message: str) -> str:
-        """
-        Determine if the user is the recommender or student based on their message.
-        """
+        """Determine if the user is the recommender or student."""
         recommender_indicators = [
-            "i am the", "as their professor", "as his/her", "my student",
-            "i supervised", "i taught", "worked under me", "in my lab",
-            "i recommend", "recommending"
+            "i am the",
+            "as their professor",
+            "as his/her",
+            "my student",
+            "i supervised",
+            "i taught",
+            "worked under me",
+            "in my lab",
+            "i recommend",
+            "recommending",
         ]
-        
+
         student_indicators = [
-            "my professor", "my supervisor", "my mentor", "asked my",
-            "for my recommender", "my lor", "letter for me",
-            "preparing a draft", "on behalf of"
+            "my professor",
+            "my supervisor",
+            "my mentor",
+            "asked my",
+            "for my recommender",
+            "my lor",
+            "letter for me",
+            "preparing a draft",
+            "on behalf of",
         ]
-        
+
         message_lower = message.lower()
-        
-        recommender_score = sum(1 for ind in recommender_indicators if ind in message_lower)
+
+        recommender_score = sum(
+            1 for ind in recommender_indicators if ind in message_lower
+        )
         student_score = sum(1 for ind in student_indicators if ind in message_lower)
-        
+
         if recommender_score > student_score:
             return "recommender"
-        elif student_score > recommender_score:
+        if student_score > recommender_score:
             return "student"
-        else:
-            return "unknown"
+        return "unknown"
+

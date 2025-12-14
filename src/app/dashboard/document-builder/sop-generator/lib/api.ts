@@ -14,6 +14,16 @@ function getAuthToken(): string {
   return 'test_token';
 }
 
+function getOrCreateUserId(): string {
+  if (typeof window === 'undefined') return 'demo-user';
+  const key = 'edulens_user_id';
+  const existing = window.localStorage.getItem(key);
+  if (existing && existing.trim().length > 0) return existing;
+  const generated = `user-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+  window.localStorage.setItem(key, generated);
+  return generated;
+}
+
 /**
  * Upload a file
  */
@@ -29,6 +39,7 @@ export async function uploadFile(
     method: 'POST',
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
+      'x-user-id': getOrCreateUserId(),
     },
     body: formData,
   });
@@ -57,6 +68,7 @@ export async function listUploadedFiles(limit: number = 50): Promise<UploadedFil
     method: 'GET',
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
+      'x-user-id': getOrCreateUserId(),
     },
   });
 

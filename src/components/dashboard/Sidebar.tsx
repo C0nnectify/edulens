@@ -24,8 +24,8 @@ const navigation = [
     icon: Home,
   },
   {
-    name: 'Document AI',
-    href: '/dashboard/document-ai',
+    name: 'Document Vault',
+    href: '/dashboard/document-vault',
     icon: Upload,
   },
   {

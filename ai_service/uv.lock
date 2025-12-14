@@ -949,6 +949,7 @@ dependencies = [
     { name = "numpy" },
     { name = "openai" },
     { name = "passlib", extra = ["bcrypt"] },
+    { name = "pdf2image" },
     { name = "pillow" },
     { name = "playwright" },
     { name = "pydantic" },
@@ -1051,6 +1052,7 @@ requires-dist = [
     { name = "numpy", specifier = "==1.26.3" },
     { name = "openai", specifier = "==1.10.0" },
     { name = "passlib", extras = ["bcrypt"], specifier = "==1.7.4" },
+    { name = "pdf2image", specifier = "==1.16.3" },
     { name = "pillow", specifier = ">=10.3.0" },
     { name = "playwright", specifier = "==1.49.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0.0" },
@@ -3338,6 +3340,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ca/bc/f35b8446f4531a7cb215605d100cd88b7ac6f44ab3fc94870c120ab3adbf/pathspec-0.12.1.tar.gz", hash = "sha256:a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712", size = 51043, upload-time = "2023-12-10T22:30:45Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08", size = 31191, upload-time = "2023-12-10T22:30:43.14Z" },
+]
+
+[[package]]
+name = "pdf2image"
+version = "1.16.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b3/96/ad8331752aab6af890151efeee9d35a47c019502a51be5ff3b4791083695/pdf2image-1.16.3.tar.gz", hash = "sha256:74208810c2cef4d9e347769b8e62a52303982ddb4f2dfd744c7ab4b940ae287e", size = 12891, upload-time = "2023-03-14T02:34:53.324Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/8c/37a7467d88c47e435429c147020c2fb53206fabfc44b8b72f9728e79ce1a/pdf2image-1.16.3-py3-none-any.whl", hash = "sha256:b6154164af3677211c22cbb38b2bd778b43aca02758e962fe1e231f6d3b0e380", size = 11548, upload-time = "2023-02-26T20:36:23.935Z" },
 ]
 
 [[package]]

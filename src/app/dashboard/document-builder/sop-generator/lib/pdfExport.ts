@@ -97,7 +97,22 @@ export async function downloadEditorPdf(editorRef: React.RefObject<EditorHandle 
 
     const html = editorRef.current?.getHTML();
     if (!html) { alert('No content to export.'); return; }
-    const ret = htmlToPdfmake(html);
+    
+    // Clean HTML before conversion
+    const cleanHtml = html
+      .replace(/\u00A0/g, ' ')  // Replace non-breaking spaces with regular spaces
+      .replace(/\u200B/g, '')    // Remove zero-width spaces
+      .replace(/\u2060/g, '')    // Remove word joiners
+      .replace(/\uFEFF/g, '')    // Remove zero-width no-break spaces
+      .replace(/<br\s*\/?>/gi, '<br/>') // Normalize line breaks
+      .replace(/&nbsp;/g, ' ');  // Replace HTML entity spaces
+    
+    const ret = htmlToPdfmake(cleanHtml, {
+      ignoreStyles: [],
+      tableAutoSize: true,
+      imagesByReference: false,
+      removeExtraBlanks: false
+    });
 
     // Detect font usage from html
     let selectedFont = 'TimesNewRoman';
@@ -134,12 +149,36 @@ export async function downloadEditorPdf(editorRef: React.RefObject<EditorHandle 
       content: ret,
       pageSize: 'LETTER' as const,
       pageMargins: [72,72,72,72] as [number,number,number,number],
-      defaultStyle: { font: selectedFont, fontSize: 12, lineHeight: 1.5, alignment: 'justify' as const },
+      defaultStyle: { 
+        font: selectedFont, 
+        fontSize: 12, 
+        lineHeight: 1.5, 
+        alignment: 'left' as const,
+        preserveLeadingSpaces: false
+      },
       styles: {
-        h1: { fontSize: 16, bold: true, alignment: 'center' as const, margin: [0,0,0,18] as [number,number,number,number] },
-        h2: { fontSize: 14, bold: true, margin: [0,14,0,8] as [number,number,number,number] },
-        h3: { fontSize: 12, bold: true, margin: [0,12,0,6] as [number,number,number,number] },
-        p: { margin: [0,0,0,12] as [number,number,number,number] },
+        h1: { 
+          fontSize: 16, 
+          bold: true, 
+          alignment: 'left' as const, 
+          margin: [0,0,0,12] as [number,number,number,number] 
+        },
+        h2: { 
+          fontSize: 14, 
+          bold: true, 
+          alignment: 'left' as const,
+          margin: [0,10,0,6] as [number,number,number,number] 
+        },
+        h3: { 
+          fontSize: 12, 
+          bold: true, 
+          alignment: 'left' as const,
+          margin: [0,8,0,4] as [number,number,number,number] 
+        },
+        p: { 
+          margin: [0,0,0,8] as [number,number,number,number], 
+          alignment: 'left' as const 
+        },
       }
     };
 

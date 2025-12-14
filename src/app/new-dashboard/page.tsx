@@ -1,7 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Upload, Mic, Sparkles, FileText, Activity, ListChecks, Search, Paperclip, ChevronRight, Plus, Menu, MessageSquare, Clock, X, TrendingUp, BarChart3, Zap, ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Check, AlertCircle, Loader2, File, Image, FileSpreadsheet, type LucideIcon } from "lucide-react";
+import { Upload, Mic, Sparkles, FileText, Activity, ListChecks, Search, Paperclip, ChevronRight, Plus, Menu, MessageSquare, Clock, X, Zap, ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Check, AlertCircle, Loader2, File, Image, FileSpreadsheet, type LucideIcon } from "lucide-react";
 import { sendMessage, uploadFile, getUserFiles, listSessions, getHistory, DocumentType, FileAttachment } from "@/lib/api/chatOrchestrator";
 
 type FeatureKey = "document_builder" | "monitoring_agent" | "future_prediction" | "present_analyzer" | null;
@@ -30,7 +30,7 @@ type ChatMessage = {
 };
 
 // Document type options for Document Builder
-const documentTypeOptions: Array<{ key: DocumentType; label: string; description: string; icon: LucideIcon; color: string }> = [
+const documentTypeOptions: Array<{ key: DocumentType | 'analyze'; label: string; description: string; icon: LucideIcon; color: string }> = [
   {
     key: "sop",
     label: "SOP",
@@ -59,45 +59,38 @@ const documentTypeOptions: Array<{ key: DocumentType; label: string; description
     icon: Briefcase,
     color: "from-orange-500 to-red-600",
   },
+  {
+    key: "analyze",
+    label: "Analyze",
+    description: "Document Analysis",
+    icon: Search,
+    color: "from-pink-500 to-rose-600",
+  },
 ];
 
 const agentTools: Array<{ key: Exclude<FeatureKey, null>; label: string; description: string; icon: LucideIcon; color: string }> = [
   {
     key: "document_builder",
     label: "Document Builder",
-    description: "Build your documents in one place. Organized, polished, with the touch of AI.",
+    description: "Create SOP, LOR, CV, Resume, and analyze documents with AI assistance.",
     icon: FileText,
     color: "from-cyan-400 to-blue-500",
   },
   {
     key: "monitoring_agent",
-    label: "Monitoring Agent",
-    description: "Keep your documents in one place. Organized, polished, with the touch of AI.",
-    icon: Activity,
+    label: "Application Tracker",
+    description: "Track your university applications and monitor their status (Coming soon).",
+    icon: ListChecks,
     color: "from-emerald-400 to-teal-500",
-  },
-  {
-    key: "future_prediction",
-    label: "Future Prediction",
-    description: "Predict outcomes and trends for your applications and academic journey.",
-    icon: TrendingUp,
-    color: "from-violet-400 to-purple-500",
-  },
-  {
-    key: "present_analyzer",
-    label: "Present Analyzer",
-    description: "Analyze your current profile, documents, and application status in real-time.",
-    icon: BarChart3,
-    color: "from-green-400 to-lime-500",
   },
 ];
 
 const quickLinks: Array<{ title: string; description: string; href: string; icon: LucideIcon }> = [
   {
-    title: 'Document Builder',
-    description: 'Create AI-powered documents',
-    href: '/dashboard/document-builder',
-    icon: FileText,
+    title: 'Document Vault',
+    description: 'Browse all your uploaded documents',
+    href: '/dashboard/document-ai',
+    icon: Upload,
   },
   {
     title: 'SOP Generator',
@@ -146,7 +139,7 @@ type RecentChat = {
 
 export default function NewDashboardPage() {
   const [selectedTool, setSelectedTool] = useState<FeatureKey>(null);
-  const [selectedDocumentType, setSelectedDocumentType] = useState<DocumentType>(null);
+  const [selectedDocumentType, setSelectedDocumentType] = useState<DocumentType | 'analyze' | null>(null);
   const [showDocumentTypeDropdown, setShowDocumentTypeDropdown] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -212,22 +205,21 @@ export default function NewDashboardPage() {
     if (!selectedTool) return "Ask anything. Type @ for mentions and / for shortcuts.";
     
     if (selectedTool === "document_builder" && selectedDocumentType) {
-      const docTypeLabels = {
+      const docTypeLabels: Record<string, string> = {
         sop: "Tell me about your background, target university, and career goals for your SOP…",
         lor: "Share details about the student/colleague you're recommending…",
         cv: "Let's build your academic CV. Tell me about your education and research…",
         resume: "Let's create your resume. What position are you targeting?",
+        analyze: "Upload documents to analyze and get insights…",
       };
-      return docTypeLabels[selectedDocumentType];
+      return docTypeLabels[selectedDocumentType as string];
     }
     
-    const toolPlaceholders = {
+    const toolPlaceholders: Record<string, string> = {
       document_builder: "Select a document type above to get started…",
-      monitoring_agent: "Monitor updates, alerts, and changes for your applications…",
-      future_prediction: "Predict admission chances, outcomes, and future trends…",
-      present_analyzer: "Analyze current profile, program fit, or compare universities…",
+      monitoring_agent: "Application tracker feature coming soon…",
     };
-    return toolPlaceholders[selectedTool];
+    return toolPlaceholders[selectedTool] || "Ask anything…";
   }, [selectedTool, selectedDocumentType]);
 
   useEffect(() => {
@@ -370,7 +362,7 @@ export default function NewDashboardPage() {
         sessionId: sessionId || undefined,
         message: text,
         feature,
-        documentType: selectedTool === "document_builder" ? selectedDocumentType : undefined,
+        documentType: selectedTool === "document_builder" && selectedDocumentType !== 'analyze' ? selectedDocumentType : undefined,
         attachmentIds: selectedFileIds.length > 0 ? selectedFileIds : undefined,
       });
       
@@ -379,9 +371,9 @@ export default function NewDashboardPage() {
       // If a document draft was generated (e.g., SOP via Document Builder),
       // persist it in localStorage so the dedicated editor can load it.
       let draftKey: string | undefined;
-      if (typeof window !== "undefined" && res.documentDraft && selectedTool === "document_builder") {
+      if (typeof window !== "undefined" && res.documentDraft && selectedTool === "document_builder" && selectedDocumentType !== 'analyze') {
         try {
-          const docType: DocumentType | null = selectedDocumentType || null;
+          const docType: DocumentType | null = selectedDocumentType as DocumentType || null;
           const payload = {
             documentType: docType,
             documentDraft: res.documentDraft,
@@ -402,7 +394,7 @@ export default function NewDashboardPage() {
         progress: res.progress,
         documentDraft: res.documentDraft,
         action: res.action,
-        documentType: selectedTool === "document_builder" ? selectedDocumentType : null,
+        documentType: selectedTool === "document_builder" && selectedDocumentType !== 'analyze' ? selectedDocumentType as DocumentType : null,
         draftKey,
       };
       setMessages((prev) => [...prev, aiMsg]);
@@ -615,7 +607,7 @@ export default function NewDashboardPage() {
                         <FileText size={16} className="text-gray-500" />
                         <span className="text-sm font-medium text-gray-700">Select document type:</span>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                         {documentTypeOptions.map((docType) => (
                           <button
                             key={docType.key}
@@ -914,10 +906,11 @@ export default function NewDashboardPage() {
               </div>
             )}
             <div className="bg-white border-2 border-gray-200 rounded-2xl shadow-sm hover:border-gray-300 transition-colors">
-              {/* Selected Files Preview */}
+              {/* Selected Files Preview - Shows both uploaded and selected previous files */}
               {(uploadedFiles.length > 0 || selectedFileIds.length > 0) && (
                 <div className="px-3 pt-3 pb-1 border-b border-gray-100">
                   <div className="flex flex-wrap gap-2">
+                    {/* Show newly uploaded files */}
                     {uploadedFiles.map((file, idx) => {
                       const FileIcon = getFileIcon(file.type);
                       return (
@@ -926,7 +919,7 @@ export default function NewDashboardPage() {
                           className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs border ${
                             file.status === "uploading" ? "bg-blue-50 border-blue-200" :
                             file.status === "error" ? "bg-red-50 border-red-200" :
-                            selectedFileIds.includes(file.id) ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"
+                            "bg-green-50 border-green-200"
                           }`}
                         >
                           {file.status === "uploading" ? (
@@ -934,18 +927,13 @@ export default function NewDashboardPage() {
                           ) : file.status === "error" ? (
                             <AlertCircle size={12} className="text-red-500" />
                           ) : (
-                            <FileIcon size={12} className="text-gray-500" />
+                            <>
+                              <FileIcon size={12} className="text-green-600" />
+                              <Check size={12} className="text-green-600" />
+                            </>
                           )}
-                          <span className="max-w-[100px] truncate">{file.name}</span>
+                          <span className="max-w-[100px] truncate font-medium">{file.name}</span>
                           <span className="text-gray-400">{formatFileSize(file.size)}</span>
-                          {file.status === "ready" && (
-                            <button 
-                              onClick={() => toggleFileSelection(file.id)}
-                              className={`p-0.5 rounded ${selectedFileIds.includes(file.id) ? "text-green-600" : "text-gray-400 hover:text-gray-600"}`}
-                            >
-                              <Check size={12} />
-                            </button>
-                          )}
                           <button 
                             onClick={() => removeUploadedFile(file.id)}
                             className="p-0.5 text-gray-400 hover:text-gray-600"
@@ -955,6 +943,31 @@ export default function NewDashboardPage() {
                         </div>
                       );
                     })}
+                    
+                    {/* Show selected previous files as chips */}
+                    {previousFiles
+                      .filter(pf => selectedFileIds.includes(pf.id) && !uploadedFiles.find(uf => uf.id === pf.id))
+                      .map((file, idx) => {
+                        const FileIcon = getFileIcon(file.type);
+                        return (
+                          <div 
+                            key={`prev-chip-${file.id}-${idx}`} 
+                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs border bg-green-50 border-green-200"
+                          >
+                            <FileIcon size={12} className="text-green-600" />
+                            <Check size={12} className="text-green-600" />
+                            <span className="max-w-[100px] truncate font-medium">{file.name}</span>
+                            <span className="text-gray-400">{formatFileSize(file.size)}</span>
+                            <button 
+                              onClick={() => toggleFileSelection(file.id)}
+                              className="p-0.5 text-gray-400 hover:text-gray-600"
+                              title="Remove attachment"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -1037,7 +1050,7 @@ export default function NewDashboardPage() {
                     </div>
                   ) : previousFiles.length === 0 ? (
                     <div className="text-xs text-gray-400 text-center py-4">
-                      No files uploaded yet. Upload a CV, transcript, or other document to use in your {selectedDocumentType?.toUpperCase() || "document"}.
+                      No files uploaded yet. Upload a CV, transcript, or other document to use {selectedDocumentType === 'analyze' ? 'for analysis' : `in your ${selectedDocumentType?.toUpperCase() || "document"}`}.
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">

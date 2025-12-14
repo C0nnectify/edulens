@@ -84,6 +84,100 @@ class SOPTool(BaseDocumentTool):
     def get_required_fields(self) -> Dict[str, List[str]]:
         return SOP_REQUIRED_FIELDS
 
+    async def _get_attachment_text(self, state: DocumentBuilderState) -> str:
+        """Aggregate raw text from any uploaded attachments for this SOP session.
+
+        This mirrors the attachment handling used for LOR and supports both:
+        - Files stored via the SOP_Generator storage service
+        - Documents ingested through the central Document AI pipeline
+
+        The aggregated text is used as extra context when extracting
+        structured SOP information so we can infer things like target
+        program/university or background details directly from a CV or
+        transcript before asking the user.
+        """
+        if not getattr(state, "attachments", None):
+            return ""
+
+        try:
+            from app.SOP_Generator.services import storage as storage_module
+            from app.SOP_Generator import db as db_module
+            from app.database.mongodb import get_documents_collection
+            from app.services import DocumentProcessor
+
+            db_client = db_module.DatabaseClient()
+            storage = storage_module.StorageService(db_client.get_files_collection())
+
+            docs_collection = get_documents_collection()
+            doc_processor = DocumentProcessor()
+
+            collected_chunks: List[str] = []
+            for file_id in state.attachments:
+                text: str = ""
+
+                # 1) Try new centralized UserFile collection (MongoDB + ChromaDB)
+                try:
+                    from app.database.mongodb import get_mongodb_client
+                    mongodb = await get_mongodb_client()
+                    user_files_collection = mongodb.get_database().user_files
+                    
+                    user_file = await user_files_collection.find_one({
+                        "fileId": file_id,
+                        "userId": state.user_id,
+                    })
+                    
+                    if user_file:
+                        logger.info(f"Found UserFile {file_id}: status={user_file.get('processingStatus')}, hasText={bool(user_file.get('extractedText'))}")
+                        if user_file.get("extractedText"):
+                            text = user_file["extractedText"]
+                            logger.info(f"Loaded {len(text)} chars from UserFile {file_id}")
+                        else:
+                            logger.warning(f"UserFile {file_id} found but no extractedText yet (status: {user_file.get('processingStatus')})")
+                    else:
+                        logger.debug(f"UserFile {file_id} not found in collection")
+                except Exception as e:
+                    logger.error(f"UserFile lookup failed for {file_id}: {e}")
+                    text = ""
+
+                # 2) Try SOP_Generator file store (legacy system)
+                if not text:
+                    try:
+                        text = storage.get_file_text(file_id, state.user_id) or ""
+                    except Exception:
+                        text = ""
+
+                # 3) If nothing found, fall back to Document AI documents
+                if not text:
+                    try:
+                        doc = await docs_collection.find_one({
+                            "document_id": file_id,
+                            "user_id": state.user_id,
+                        })
+                        if doc and doc.get("file_path"):
+                            file_path = doc["file_path"]
+                            try:
+                                text, _ = await doc_processor.process_document(file_path)
+                            except Exception:
+                                text = ""
+                    except Exception:
+                        text = ""
+
+                if not text:
+                    logger.warning(f"No text found for attachment {file_id}")
+                    continue
+
+                snippet = text.strip().replace("\n", " ")[:2000]
+                collected_chunks.append(snippet)
+
+            if not collected_chunks:
+                return ""
+
+            combined = "\n\n".join(collected_chunks)
+            return combined[:8000]
+
+        except Exception:
+            return ""
+
     async def extract_info_from_message(
         self, message: str, state: DocumentBuilderState
     ) -> Dict[str, Any]:
@@ -95,12 +189,22 @@ class SOPTool(BaseDocumentTool):
         - Background information
         - Experience details
         - Goals and motivations
+
+        In addition to the user's message, this function also looks at any
+        uploaded attachments (CVs, transcripts, etc.) attached to the
+        current session so it can infer as much as possible before asking
+        follow-up questions.
         """
+        attachment_context = await self._get_attachment_text(state)
+
         extraction_prompt = f"""
 Analyze the following message and extract any information relevant to a Statement of Purpose.
 
 User Message:
 \"\"\"{message}\"\"\"
+
+Attachment Context (from uploaded files, if any):
+{attachment_context or "(no attachment text available)"}
 
 Current Context:
 - Current topic being discussed: {state.current_topic or "general"}
@@ -435,8 +539,13 @@ Return valid JSON only.
     async def _get_attachment_context(self, state: DocumentBuilderState) -> str:
         """Build context string from any uploaded files attached to this session.
 
-        This reads extracted text for each file ID and provides concise previews
-        that Gemini can use when drafting the SOP.
+        This now supports both:
+        - SOP/LOR uploads stored via the SOP_Generator storage service
+        - Documents ingested through the central Document AI pipeline
+
+        For each attachment ID we first try to read from the SOP_Generator
+        files collection; if nothing is found, we fall back to the Document
+        AI documents metadata and re-extract text from the stored file path.
         """
         if not getattr(state, "attachments", None):
             return "No additional documents were provided. Focus on the chat information only."
@@ -444,29 +553,64 @@ Return valid JSON only.
         try:
             from app.SOP_Generator.services import storage as storage_module
             from app.SOP_Generator import db as db_module
+            from app.database.mongodb import get_documents_collection
+            from app.services import DocumentProcessor
 
             db_client = db_module.DatabaseClient()
             storage = storage_module.StorageService(db_client.get_files_collection())
 
+            docs_collection = get_documents_collection()
+            doc_processor = DocumentProcessor()
+
             snippets: List[str] = []
             for file_id in state.attachments:
+                text: str = ""
+
+                # 1) Try SOP_Generator file store (used by SOP/LOR and chat uploads)
                 try:
-                    text = storage.get_file_text(file_id, state.user_id)
-                    if not text:
-                        continue
-                    snippet = text.strip().replace("\n", " ")[:600]
-                    snippets.append(f"File {file_id}: {snippet}...")
+                    text = storage.get_file_text(file_id, state.user_id) or ""
                 except Exception:
+                    text = ""
+
+                # 2) If nothing found, fall back to Document AI documents
+                if not text:
+                    try:
+                        doc = await docs_collection.find_one({
+                            "document_id": file_id,
+                            "user_id": state.user_id,
+                        })
+                        if doc and doc.get("file_path"):
+                            file_path = doc["file_path"]
+                            try:
+                                text, _ = await doc_processor.process_document(file_path)
+                            except Exception:
+                                text = ""
+                    except Exception:
+                        text = ""
+
+                if not text:
                     continue
+
+                snippet = text.strip().replace("\n", " ")[:600]
+                snippets.append(f"File {file_id}: {snippet}...")
 
             if not snippets:
                 return "Uploaded documents could not be read; rely on the chat details instead."
 
-            header = "The applicant has uploaded documents such as a CV and academic transcripts. Here are key excerpts you should implicitly leverage (do not quote verbatim, but use them to ground the SOP):\n"
+            header = (
+                "The applicant has uploaded documents such as a CV, resume, "
+                "and academic transcripts. Here are key excerpts you should "
+                "implicitly leverage (do not quote verbatim, but use them to "
+                "ground the SOP):\n"
+            )
             return header + "\n".join(f"- {s}" for s in snippets)
 
         except Exception:
-            return "Uploaded documents are available but could not be loaded; rely on the chat details while still writing a grounded, specific SOP."
+            return (
+                "Uploaded documents are available but could not be loaded; "
+                "rely on the chat details while still writing a grounded, "
+                "specific SOP."
+            )
 
     def format_document_for_editor(self, document: GeneratedDocument) -> Dict[str, Any]:
         """Override base formatting to avoid per-section headings for SOP.

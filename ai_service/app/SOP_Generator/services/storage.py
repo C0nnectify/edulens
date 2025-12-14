@@ -161,6 +161,12 @@ class StorageService:
             File document or None
         """
         try:
+            # Check if file_id looks like a valid ObjectId (24 hex chars)
+            # If it's a custom format like "file-123-abc", skip ObjectId conversion
+            if not (len(file_id) == 24 and all(c in '0123456789abcdef' for c in file_id.lower())):
+                # Not a valid ObjectId format, skip this lookup
+                return None
+            
             file_doc = self.files_collection.find_one({
                 "_id": ObjectId(file_id),
                 "user_id": user_id
@@ -171,7 +177,7 @@ class StorageService:
             
             return file_doc
         except Exception as e:
-            print(f"Error retrieving file: {e}")
+            # Silently fail for non-ObjectId formats (new centralized system uses custom IDs)
             return None
     
     def get_file_text(self, file_id: str, user_id: str) -> str:

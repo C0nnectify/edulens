@@ -1,4 +1,4 @@
-"""LLM client for SOP generation using LangChain and Gemini"""
+"""LLM client for SOP generation using LangChain and Gemini with Groq fallback"""
 
 import os
 import json
@@ -6,7 +6,9 @@ from typing import Dict, Any, List, Optional
 import logging
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain.schema import HumanMessage, SystemMessage
+from google.api_core.exceptions import ResourceExhausted
 
 from app.config import settings
 
@@ -15,6 +17,7 @@ from app.config import settings
 # -------------------------------------------------------------------
 
 GEMINI_API_KEY = settings.google_api_key or os.getenv("GEMINI_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 USE_MOCK_LLM = os.getenv("USE_MOCK_LLM", "false").strip().lower() in ("1", "true", "yes", "y")
 
 logger = logging.getLogger(__name__)
@@ -198,21 +201,71 @@ class LLMClient:
 
     def __init__(self) -> None:
         # Use mock if explicitly requested or if no API key is available
-        self.use_mock = USE_MOCK_LLM or not bool(GEMINI_API_KEY)
+        self.use_mock = USE_MOCK_LLM or (not bool(GEMINI_API_KEY) and not bool(GROQ_API_KEY))
 
+        self.llm = None
+        self.groq_llm = None
+        
         if not self.use_mock:
-            model_name = settings.google_model or "gemini-2.5-flash"
-            logger.info("Initializing Gemini LLM with model=%s", model_name)
-            self.llm = ChatGoogleGenerativeAI(
-                model=model_name,
-                google_api_key=GEMINI_API_KEY,
-                temperature=0.3,  # lower temp for factual consistency
-            )
+            # Initialize Gemini as primary
+            if GEMINI_API_KEY:
+                model_name = settings.google_model or "gemini-2.5-flash"
+                logger.info("Initializing Gemini LLM with model=%s", model_name)
+                self.llm = ChatGoogleGenerativeAI(
+                    model=model_name,
+                    google_api_key=GEMINI_API_KEY,
+                    temperature=0.3,  # lower temp for factual consistency
+                )
+            
+            # Initialize Groq as fallback
+            if GROQ_API_KEY:
+                logger.info("Initializing Groq LLM as fallback (llama-3.3-70b-versatile)")
+                self.groq_llm = ChatGroq(
+                    model="llama-3.3-70b-versatile",
+                    api_key=GROQ_API_KEY,
+                    temperature=0.3,
+                )
         else:
-            logger.warning("Using MOCK LLM for SOP generation (no Gemini key or USE_MOCK_LLM=true).")
-            self.llm = None
+            logger.warning("Using MOCK LLM for SOP generation (no API keys or USE_MOCK_LLM=true).")
 
     # ---------------------------- helpers ---------------------------- #
+    
+    def _invoke_with_fallback(self, messages: List) -> Any:
+        """
+        Invoke LLM with automatic fallback to Groq if Gemini quota is exceeded.
+        
+        Returns:
+            LLM response
+        """
+        # Try Gemini first
+        if self.llm:
+            try:
+                return self.llm.invoke(messages)
+            except ResourceExhausted as e:
+                logger.warning(f"Gemini quota exceeded: {e}. Falling back to Groq...")
+                if self.groq_llm:
+                    try:
+                        return self.groq_llm.invoke(messages)
+                    except Exception as groq_error:
+                        logger.error(f"Groq fallback also failed: {groq_error}")
+                        raise
+                else:
+                    logger.error("No Groq API key available for fallback")
+                    raise
+            except Exception as e:
+                logger.error(f"Gemini invocation failed: {e}")
+                raise
+        
+        # If no Gemini, try Groq directly
+        elif self.groq_llm:
+            try:
+                return self.groq_llm.invoke(messages)
+            except Exception as e:
+                logger.error(f"Groq invocation failed: {e}")
+                raise
+        
+        else:
+            raise RuntimeError("No LLM available (neither Gemini nor Groq)")
 
     def _mock_sop_response(self, program: str, university: str) -> Dict[str, Any]:
         """Generate a simple mock SOP JSON for testing without hitting Gemini."""
@@ -384,8 +437,8 @@ class LLMClient:
         ]
 
         try:
-            logger.info("Invoking Gemini for SOP generation: program=%s, university=%s", program, university)
-            response = self.llm.invoke(messages)
+            logger.info("Invoking LLM for SOP generation: program=%s, university=%s", program, university)
+            response = self._invoke_with_fallback(messages)
             content = response.content
             logger.debug("Raw LLM response: %s", content)
 
@@ -480,7 +533,7 @@ class LLMClient:
 
         try:
             logger.info("Invoking LLM for LOR generation: student=%s program=%s", student_name, target_program)
-            response = self.llm.invoke(messages)
+            response = self._invoke_with_fallback(messages)
             content = response.content
             result = self._extract_json_from_llm(content)
             if "sections" not in result or "plain_text" not in result:
@@ -581,7 +634,7 @@ class LLMClient:
         ]
 
         try:
-            response = self.llm.invoke(messages)
+            response = self._invoke_with_fallback(messages)
             rewritten = response.content.strip()
             return rewritten or selected_text
         except Exception as e:

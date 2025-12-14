@@ -51,7 +51,7 @@ const aiBase = process.env.NEXT_PUBLIC_AI_SERVICE_URL || "http://localhost:8000"
 function getOrCreateUserId(): string {
   if (typeof window === "undefined") return "demo-user";
   const key = "edulens_user_id";
-  let existing = window.localStorage.getItem(key);
+  const existing = window.localStorage.getItem(key);
   if (existing && existing.trim().length > 0) return existing;
   const generated = `user-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
   window.localStorage.setItem(key, generated);
@@ -97,9 +97,17 @@ export async function uploadFile(file: File, docType: string = "document"): Prom
   formData.append("file", file);
   formData.append("doc_type", docType);
 
-  // Use SOP upload service that stores files for document builder
+  const userId = getOrCreateUserId();
+
+  // Use SOP upload service that stores files for document builder.
+  // We mirror the SOP editor client by authenticating with the same
+  // test token so that files are stored under a single test user.
   const res = await fetch(`${aiBase}/api/sop/upload`, {
     method: "POST",
+    headers: {
+      Authorization: "Bearer test_token",
+      "x-user-id": userId,
+    },
     body: formData,
   });
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
@@ -115,21 +123,23 @@ export async function uploadFile(file: File, docType: string = "document"): Prom
 
 export async function getUserFiles(): Promise<UserFilesResponse> {
   try {
-    // Backend requires an x-user-id header via get_current_user dependency.
-    // For now we send a stable demo user ID; replace with real auth when available.
-    const userId =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem("edulens_user_id") || "demo-user"
-        : "demo-user";
-
-    const res = await fetch(`${aiBase}/api/v1/files/list`, {
+    const userId = getOrCreateUserId();
+    
+    // Use centralized file API
+    const response = await fetch(`/api/user-files?limit=100`, {
       headers: {
         "x-user-id": userId,
       },
     });
-    if (!res.ok) return { files: [] };
-    return res.json();
-  } catch {
+    
+    if (!response.ok) {
+      return { files: [] };
+    }
+    
+    const data = await response.json();
+    return { files: data.files || [] };
+  } catch (error) {
+    console.error('Error fetching user files:', error);
     return { files: [] };
   }
 }

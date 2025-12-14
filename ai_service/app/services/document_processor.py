@@ -139,3 +139,7 @@ class DocumentProcessor:
             return False
 
         return True
+
+
+# Create singleton instance
+document_processor = DocumentProcessor()
