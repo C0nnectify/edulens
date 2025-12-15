@@ -37,7 +37,11 @@ class DocumentMetadata(BaseModel):
     filename: str = Field(..., description="Original filename")
     file_hash: str = Field(..., description="SHA-256 hash")
     file_type: str = Field(..., description="File type")
-    file_path: str = Field(..., description="Path to stored file")
+    # Storage backends
+    storage_backend: str = Field(default="disk", description="Where the file is stored: 'disk' or 'gridfs'")
+    file_path: Optional[str] = Field(default=None, description="Path to stored file (disk backend)")
+    gridfs_id: Optional[str] = Field(default=None, description="GridFS file id (gridfs backend)")
+    content_type: Optional[str] = Field(default=None, description="MIME type")
     file_size: int = Field(..., description="File size in bytes")
     tags: List[str] = Field(default_factory=list, description="User-defined tags")
     total_chunks: int = Field(..., description="Total number of chunks")

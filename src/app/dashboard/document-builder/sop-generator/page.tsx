@@ -5,7 +5,7 @@
  */
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Save, Download, ArrowLeft, Trash2 } from 'lucide-react';
@@ -16,7 +16,7 @@ import AIChat from './components/AIChat';
 import Editor, { EditorHandle } from './components/Editor';
 import { saveSOP, listSOPs, getSOP, deleteSOP, SOPSummary } from './lib/api';
 
-export default function SOPGeneratorPage() {
+function SOPGeneratorPageInner() {
   const searchParams = useSearchParams();
   const docIdFromUrl = searchParams?.get('id');
   const draftKeyFromUrl = searchParams?.get('draftKey');
@@ -533,6 +533,14 @@ export default function SOPGeneratorPage() {
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+export default function SOPGeneratorPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <SOPGeneratorPageInner />
+    </Suspense>
   );
 }
 

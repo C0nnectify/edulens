@@ -72,10 +72,12 @@ class SearchService:
         Returns:
             List of SearchResult objects
         """
-        # Generate query embedding
+        # Generate query embedding (prefer OpenAI if available, else HuggingFace)
+        from app.config import settings
+        provider = "openai" if getattr(settings, "openai_api_key", None) else "huggingface"
         query_embedding = await self.embedding_service.generate_query_embedding(
             request.query,
-            provider="openai"  # Can be made configurable
+            provider=provider
         )
 
         # Perform vector search
@@ -100,9 +102,11 @@ class SearchService:
             List of SearchResult objects
         """
         # Generate query embedding to ensure dimension consistency
+        from app.config import settings
+        provider = "openai" if getattr(settings, "openai_api_key", None) else "huggingface"
         query_embedding = await self.embedding_service.generate_query_embedding(
             request.query,
-            provider="openai"
+            provider=provider
         )
         
         results = await self.vector_db.search_by_keyword(

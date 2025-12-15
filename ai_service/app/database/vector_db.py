@@ -310,7 +310,8 @@ class VectorDatabase:
         try:
             # Get all chunk IDs for the document
             results = self.collection.get(
-                where={"document_id": document_id, "user_id": self.user_id}
+                # Collection is already scoped per user; keep filter single-key for Chroma.
+                where={"document_id": document_id}
             )
             
             if not results["ids"]:
@@ -346,7 +347,8 @@ class VectorDatabase:
         try:
             # Get chunks from ChromaDB
             results = self.collection.get(
-                where={"document_id": document_id, "user_id": self.user_id},
+                # Collection is already scoped per user; keep filter single-key for Chroma.
+                where={"document_id": document_id},
                 include=["documents", "metadatas", "embeddings"] if include_embeddings else ["documents", "metadatas"]
             )
 
@@ -380,3 +382,31 @@ class VectorDatabase:
         """Create text index for keyword search (ChromaDB handles this automatically)"""
         # ChromaDB automatically creates text indexes for search
         logger.info(f"Text index ready for user {self.user_id} (ChromaDB auto-managed)")
+
+    async def list_user_documents(self) -> List[Dict[str, Any]]:
+        """List unique documents for the current user from vector store.
+
+        Returns a list of {tracking_id, document_id, filename, chunk_count}.
+        """
+        try:
+            results = self.collection.get(where={"user_id": self.user_id})
+            docs: Dict[str, Dict[str, Any]] = {}
+            if results["metadatas"]:
+                for md in results["metadatas"]:
+                    tracking_id = md.get("tracking_id", "")
+                    if not tracking_id:
+                        # skip items without tracking_id
+                        continue
+                    if tracking_id not in docs:
+                        docs[tracking_id] = {
+                            "tracking_id": tracking_id,
+                            "document_id": md.get("document_id", ""),
+                            "filename": md.get("filename", ""),
+                            "chunk_count": 0,
+                        }
+                    docs[tracking_id]["chunk_count"] += 1
+
+            return list(docs.values())
+        except Exception as e:
+            logger.error(f"Error listing documents for user {self.user_id}: {e}")
+            raise

@@ -120,49 +120,18 @@ class LORTool(BaseDocumentTool):
             for file_id in state.attachments:
                 text: str = ""
 
-                # 1) Try new centralized UserFile collection (MongoDB + ChromaDB)
-                try:
-                    from app.database.mongodb import get_mongodb_client
-                    mongodb = await get_mongodb_client()
-                    user_files_collection = mongodb.get_database().user_files
-                    
-                    user_file = await user_files_collection.find_one({
-                        "fileId": file_id,
-                        "userId": state.user_id,
-                    })
-                    
-                    if user_file:
-                        logger.info(f"Found UserFile {file_id}: status={user_file.get('processingStatus')}, hasText={bool(user_file.get('extractedText'))}")
-                        if user_file.get("extractedText"):
-                            text = user_file["extractedText"]
-                            logger.info(f"Loaded {len(text)} chars from UserFile {file_id}")
-                        else:
-                            logger.warning(f"UserFile {file_id} found but no extractedText yet (status: {user_file.get('processingStatus')})")
-                    else:
-                        logger.debug(f"UserFile {file_id} not found in collection")
-                except Exception as e:
-                    logger.error(f"UserFile lookup failed for {file_id}: {e}")
-                    text = ""
-
-                # 2) Try SOP_Generator file store (legacy system)
+                # 1) Try SOP_Generator file store (legacy system)
                 if not text:
                     try:
                         text = storage.get_file_text(file_id, state.user_id) or ""
                     except Exception:
                         text = ""
 
-                # 3) If nothing found, fall back to Document AI documents
+                # 2) If nothing found, fall back to canonical Document AI documents
                 if not text:
                     try:
-                        doc = await docs_collection.find_one(
-                            {"document_id": file_id, "user_id": state.user_id}
-                        )
-                        if doc and doc.get("file_path"):
-                            file_path = doc["file_path"]
-                            try:
-                                text, _ = await doc_processor.process_document(file_path)
-                            except Exception:
-                                text = ""
+                        from app.services.document_text_service import extract_document_text_for_user
+                        text = await extract_document_text_for_user(user_id=state.user_id, document_id=file_id)
                     except Exception:
                         text = ""
 

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { MarkdownContent } from '@/components/chat/MarkdownContent';
 import {
   Select,
   SelectContent,
@@ -338,7 +339,11 @@ export default function AIChat({
                     : 'bg-gray-200 text-gray-900'
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                {message.role === 'user' ? (
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                ) : (
+                  <MarkdownContent content={message.content} className="text-sm" />
+                )}
                 <p className="text-xs mt-1 opacity-70">
                   {message.timestamp.toLocaleTimeString()}
                 </p>

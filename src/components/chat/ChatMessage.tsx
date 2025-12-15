@@ -14,7 +14,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownContent } from '@/components/chat/MarkdownContent';
 
 export interface Source {
   id: string;
@@ -56,32 +56,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const handleFeedback = (type: 'positive' | 'negative') => {
     setFeedback(type);
     onFeedback?.(type);
-  };
-
-  // Parse content to add citation links
-  const renderContentWithCitations = (text: string) => {
-    // Replace [1], [2], etc. with clickable superscript citations
-    const citationRegex = /\[(\d+)\]/g;
-    const parts = text.split(citationRegex);
-
-    return parts.map((part, index) => {
-      // Check if this part is a number (citation)
-      if (index % 2 === 1 && sources[parseInt(part) - 1]) {
-        return (
-          <sup
-            key={index}
-            className="text-[#F5A576] hover:text-[#F08F5E] cursor-pointer font-semibold transition-colors mx-0.5"
-            onClick={() => {
-              const sourceElement = document.getElementById(`source-${id}-${part}`);
-              sourceElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }}
-          >
-            [{part}]
-          </sup>
-        );
-      }
-      return <span key={index}>{part}</span>;
-    });
   };
 
   if (type === 'user') {
@@ -126,50 +100,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         <Card className="bg-muted/30 border-none shadow-md hover:shadow-lg transition-all duration-150">
           <div className="p-4 space-y-3">
             {/* Message content with markdown support */}
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown
-                components={{
-                  // Custom renderers for markdown elements
-                  p: ({ children }) => (
-                    <p className="text-[15px] leading-relaxed mb-4 last:mb-0">
-                      {renderContentWithCitations(children?.toString() || '')}
-                    </p>
-                  ),
-                  strong: ({ children }) => (
-                    <strong className="font-semibold text-foreground">{children}</strong>
-                  ),
-                  ul: ({ children }) => (
-                    <ul className="space-y-1 list-disc pl-6 mb-4">{children}</ul>
-                  ),
-                  ol: ({ children }) => (
-                    <ol className="space-y-1 list-decimal pl-6 mb-4">{children}</ol>
-                  ),
-                  li: ({ children }) => (
-                    <li className="text-[15px] leading-relaxed">{children}</li>
-                  ),
-                  code: ({ className, children }) => {
-                    const isInline = !className;
-                    if (isInline) {
-                      return (
-                        <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono shadow-sm">
-                          {children}
-                        </code>
-                      );
-                    }
-                    return (
-                      <code className={cn(
-                        "block bg-muted p-4 rounded-lg text-sm font-mono overflow-x-auto shadow-sm",
-                        className
-                      )}>
-                        {children}
-                      </code>
-                    );
-                  },
-                }}
-              >
-                {content}
-              </ReactMarkdown>
-            </div>
+            <MarkdownContent
+              content={content}
+              citationContext={{ messageId: id, sourceCount: sources.length }}
+            />
 
             {/* Action buttons */}
             <div className="flex items-center gap-1 pt-3 mt-3 shadow-[0_-1px_0_0_rgba(0,0,0,0.05)]">

@@ -4,7 +4,7 @@
  */
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import { downloadEditorPdf } from '../sop-generator/lib/pdfExport';
 import { Download, Save, ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import { jsonToHtmlWithMarkdown, normalizeEditorHtml } from '../sop-generator/lib/markdown';
 
-export default function LORGeneratorPage() {
+function LORGeneratorPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const docIdFromUrl = searchParams?.get('id');
@@ -581,6 +581,14 @@ export default function LORGeneratorPage() {
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+export default function LORGeneratorPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <LORGeneratorPageInner />
+    </Suspense>
   );
 }
 

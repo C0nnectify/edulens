@@ -575,16 +575,8 @@ Return valid JSON only.
                 # 2) If nothing found, fall back to Document AI documents
                 if not text:
                     try:
-                        doc = await docs_collection.find_one({
-                            "document_id": file_id,
-                            "user_id": state.user_id,
-                        })
-                        if doc and doc.get("file_path"):
-                            file_path = doc["file_path"]
-                            try:
-                                text, _ = await doc_processor.process_document(file_path)
-                            except Exception:
-                                text = ""
+                        from app.services.document_text_service import extract_document_text_for_user
+                        text = await extract_document_text_for_user(user_id=state.user_id, document_id=file_id)
                     except Exception:
                         text = ""
 

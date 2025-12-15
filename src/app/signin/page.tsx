@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Bot, Zap, Shield } from 'lucide-react';
 import { signIn, useSession } from '@/lib/auth-client';
 
-export default function SignInPage() {
+function SignInPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -231,4 +231,12 @@ export default function SignInPage() {
       </div>
     </div>
   );
-} 
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <SignInPageInner />
+    </Suspense>
+  );
+}

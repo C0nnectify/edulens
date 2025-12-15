@@ -1,19 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth-config";
+import { getChatCollections } from "@/lib/db/chatHistory";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sessionId = searchParams.get("sessionId");
   if (!sessionId) return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
-  const base = process.env.NEXT_PUBLIC_AI_SERVICE_URL || "http://localhost:8000";
-  const userId = req.headers.get("x-user-id") || "demo-user";
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const userId = session.user.id;
   try {
-    const resp = await fetch(`${base}/chat-agent/history?sessionId=${encodeURIComponent(sessionId)}`, {
-      headers: { "x-user-id": userId },
+    const { messages, sessions } = await getChatCollections();
+    const [docs, sessionDoc] = await Promise.all([
+      messages
+      .find({ userId, sessionId })
+      .sort({ createdAt: 1 })
+      .limit(500)
+      .toArray(),
+      sessions.findOne({ userId, sessionId }),
+    ]);
+
+    return NextResponse.json({
+      sessionId,
+      document_type: sessionDoc?.documentType ?? null,
+      messages: docs.map((m) => ({
+        role: m.role,
+        content: m.content,
+        attachments: m.attachments ?? [],
+        createdAt: m.createdAt?.toISOString?.() ? m.createdAt.toISOString() : undefined,
+      })),
     });
-    if (!resp.ok) return NextResponse.json({ error: "Backend error" }, { status: resp.status });
-    const data = await resp.json();
-    return NextResponse.json(data);
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Network error" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "Failed to load history" }, { status: 500 });
   }
 }

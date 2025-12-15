@@ -568,6 +568,9 @@ ${formData.personalInfo.fullName}
     }
   };
 
+  const currentStepDef = steps[currentStep - 1];
+  const CurrentStepIcon = currentStepDef?.icon;
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -634,8 +637,10 @@ ${formData.personalInfo.fullName}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <steps[currentStep - 1].icon className="h-5 w-5 text-green-600" />
-                  <span>{steps[currentStep - 1].title}</span>
+                  {CurrentStepIcon ? (
+                    <CurrentStepIcon className="h-5 w-5 text-green-600" />
+                  ) : null}
+                  <span>{currentStepDef?.title}</span>
                 </CardTitle>
                 <CardDescription>
                   Step {currentStep} of {steps.length}

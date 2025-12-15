@@ -6,6 +6,7 @@ export type FileAttachment = {
   type: string;
   size: number;
   uploadedAt?: string;
+  status?: "pending" | "processing" | "completed" | "failed";
 };
 
 export type SendMessageParams = {
@@ -34,35 +35,35 @@ export type ChatResponse = {
 };
 
 export type UploadFileResponse = {
-  fileId: string;
+  documentId: string;
   filename: string;
-  textPreview: string;
   size: number;
   type: string;
+  status: "pending" | "processing" | "completed" | "failed";
 };
 
 export type UserFilesResponse = {
   files: FileAttachment[];
 };
 
-const base = "/api/chat-orchestrator";
-const aiBase = process.env.NEXT_PUBLIC_AI_SERVICE_URL || "http://localhost:8000";
+type DocumentsApiItem = {
+  document_id: string;
+  filename: string;
+  content_type?: string | null;
+  file_type?: string | null;
+  file_size?: number | null;
+  uploaded_at?: string | null;
+  status?: "pending" | "processing" | "completed" | "failed";
+};
 
-function getOrCreateUserId(): string {
-  if (typeof window === "undefined") return "demo-user";
-  const key = "edulens_user_id";
-  const existing = window.localStorage.getItem(key);
-  if (existing && existing.trim().length > 0) return existing;
-  const generated = `user-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
-  window.localStorage.setItem(key, generated);
-  return generated;
-}
+const base = "/api/chat-orchestrator";
+const docBase = "/api/ai";
 
 export async function sendMessage(params: SendMessageParams): Promise<ChatResponse> {
-  const userId = getOrCreateUserId();
   const res = await fetch(`${base}/message`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-user-id": userId },
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(params),
   });
   if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -72,9 +73,10 @@ export async function sendMessage(params: SendMessageParams): Promise<ChatRespon
 export async function listSessions(): Promise<{
   sessions: Array<{ id: string; title?: string; updatedAt?: string; document_type?: DocumentType | null }>;
 }> {
-  const userId = getOrCreateUserId();
   const res = await fetch(`${base}/sessions`, {
-    headers: { "x-user-id": userId },
+    headers: {},
+    credentials: "include",
+    cache: "no-store",
   });
   if (!res.ok) throw new Error(`Failed: ${res.status}`);
   return res.json();
@@ -84,60 +86,61 @@ export async function getHistory(sessionId: string): Promise<{
   messages: Array<{ role: "user" | "ai"; content: string }>;
   document_type?: DocumentType | null;
 }> {
-  const userId = getOrCreateUserId();
   const res = await fetch(`${base}/history?sessionId=${encodeURIComponent(sessionId)}`, {
-    headers: { "x-user-id": userId },
+    headers: {},
+    credentials: "include",
+    cache: "no-store",
   });
   if (!res.ok) throw new Error(`Failed: ${res.status}`);
   return res.json();
 }
 
 export async function uploadFile(file: File, docType: string = "document"): Promise<UploadFileResponse> {
+  // Canonical upload: FastAPI Document AI pipeline via universal proxy.
+  // This stores the blob in Mongo (GridFS) + indexes in Chroma in background.
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("doc_type", docType);
+  // Use tags to preserve rough doc intent (cv/resume/lor/etc.) for filtering.
+  formData.append("tags", docType);
 
-  const userId = getOrCreateUserId();
-
-  // Use SOP upload service that stores files for document builder.
-  // We mirror the SOP editor client by authenticating with the same
-  // test token so that files are stored under a single test user.
-  const res = await fetch(`${aiBase}/api/sop/upload`, {
+  const res = await fetch(`${docBase}/documents/upload`, {
     method: "POST",
-    headers: {
-      Authorization: "Bearer test_token",
-      "x-user-id": userId,
-    },
     body: formData,
   });
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   const data = await res.json();
   return {
-    fileId: data.file_id,
+    documentId: data.document_id,
     filename: data.filename,
-    textPreview: data.text_preview,
     size: file.size,
     type: file.type,
+    status: data.status,
   };
 }
 
 export async function getUserFiles(): Promise<UserFilesResponse> {
   try {
-    const userId = getOrCreateUserId();
-    
-    // Use centralized file API
-    const response = await fetch(`/api/user-files?limit=100`, {
-      headers: {
-        "x-user-id": userId,
-      },
+    // Canonical list: FastAPI documents endpoint via universal proxy.
+    const response = await fetch(`${docBase}/documents?page=1&page_size=100`, {
+      headers: {},
     });
-    
-    if (!response.ok) {
-      return { files: [] };
-    }
-    
+
+    if (!response.ok) return { files: [] };
+
     const data = await response.json();
-    return { files: data.files || [] };
+    const docs: DocumentsApiItem[] = Array.isArray(data?.documents) ? (data.documents as DocumentsApiItem[]) : [];
+
+    const files: FileAttachment[] = docs.map((d) => ({
+      id: d.document_id,
+      name: d.filename,
+      // Prefer MIME type when available; otherwise fall back to file_type.
+      type: d.content_type || d.file_type || "application/octet-stream",
+      size: d.file_size || 0,
+      uploadedAt: d.uploaded_at || undefined,
+      status: d.status,
+    }));
+
+    return { files };
   } catch (error) {
     console.error('Error fetching user files:', error);
     return { files: [] };

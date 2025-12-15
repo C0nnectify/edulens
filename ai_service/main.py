@@ -14,7 +14,7 @@ import logging
 
 from app.core.config import settings
 from app.core.chroma_client import chroma_manager
-from app.api.v1 import vector_store, resume, cv, sop, tracker, research, agents, documents, embeddings, ocr, search, query, health, faculty, sop_analysis, admission, gradcafe_collection, model_training, sop_generator, sop_templates, sop_upload, roadmap, files
+from app.api.v1 import vector_store, resume, cv, sop, tracker, research, agents, documents, embeddings, ocr, search, query, health, faculty, sop_analysis, admission, gradcafe_collection, model_training, sop_generator, sop_templates, sop_upload, roadmap, files, analyzer
 from app.SOP_Generator.routes import sop as sop_gen_routes
 from app.api.v2 import multi_agent
 from app.api import documents_processing
@@ -167,6 +167,7 @@ app.include_router(agents.router, prefix="/api/v1/agents", tags=["AI Agents"])
 app.include_router(gradcafe_collection.router, prefix="/api/v1/gradcafe", tags=["GradCafe Collection"])
 app.include_router(model_training.router, prefix="/api/v1", tags=["Model Training"])
 app.include_router(files.router, prefix="/api/v1", tags=["File Management"])
+app.include_router(analyzer.router, prefix="/api/v1/analyzer", tags=["Analyzer"])
 # app.include_router(roadmap.router, prefix="/api/v1/roadmap", tags=["Roadmap"])
 
 # Include Document Processing API (MongoDB + ChromaDB)

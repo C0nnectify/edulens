@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { Upload, Mic, Sparkles, FileText, Activity, ListChecks, Search, Paperclip, ChevronRight, Plus, Menu, MessageSquare, Clock, X, Zap, ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Check, AlertCircle, Loader2, File, Image, FileSpreadsheet, type LucideIcon } from "lucide-react";
 import { sendMessage, uploadFile, getUserFiles, listSessions, getHistory, DocumentType, FileAttachment } from "@/lib/api/chatOrchestrator";
+import { MarkdownContent } from "@/components/chat/MarkdownContent";
 
 type FeatureKey = "document_builder" | "monitoring_agent" | "future_prediction" | "present_analyzer" | null;
 
@@ -11,7 +12,7 @@ type UploadedFile = {
   name: string;
   type: string;
   size: number;
-  status: "uploading" | "ready" | "error";
+  status: "uploading" | "processing" | "ready" | "error";
   preview?: string;
 };
 
@@ -157,6 +158,21 @@ export default function NewDashboardPage() {
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const filePanelRef = useRef<HTMLDivElement | null>(null);
 
+  const loadRecentChats = useCallback(async () => {
+    try {
+      const data = await listSessions();
+      const mapped: RecentChat[] = (data.sessions || []).map((s) => ({
+        id: s.id,
+        title: s.title,
+        updatedAt: s.updatedAt,
+        documentType: s.document_type ?? null,
+      }));
+      setRecentChats(mapped);
+    } catch (e) {
+      console.error("Failed to load recent sessions", e);
+    }
+  }, []);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -173,27 +189,26 @@ export default function NewDashboardPage() {
 
   // Load recent chat sessions for the sidebar
   useEffect(() => {
-    (async () => {
-      try {
-        const data = await listSessions();
-        const mapped: RecentChat[] = (data.sessions || []).map((s) => ({
-          id: s.id,
-          title: s.title,
-          updatedAt: s.updatedAt,
-          documentType: s.document_type ?? null,
-        }));
-        setRecentChats(mapped);
-      } catch (e) {
-        console.error("Failed to load recent sessions", e);
-      }
-    })();
-  }, []);
+    loadRecentChats();
+  }, [loadRecentChats]);
 
   const loadPreviousFiles = async () => {
     setIsLoadingFiles(true);
     try {
       const res = await getUserFiles();
       setPreviousFiles(res.files || []);
+
+      // Best-effort: sync statuses for files already shown in the chip row
+      // (e.g., a freshly uploaded doc transitions from processing -> ready).
+      setUploadedFiles((prev) =>
+        prev.map((f) => {
+          const match = (res.files || []).find((pf) => pf.id === f.id);
+          if (!match?.status) return f;
+          const nextStatus =
+            match.status === "completed" ? "ready" : match.status === "failed" ? "error" : "processing";
+          return { ...f, status: f.status === "uploading" ? f.status : nextStatus };
+        })
+      );
     } catch (err) {
       console.error("Failed to load files:", err);
     } finally {
@@ -279,13 +294,16 @@ export default function NewDashboardPage() {
                        selectedDocumentType === "resume" ? "resume" : 
                        selectedDocumentType === "lor" ? "lor" : "document";
         const result = await uploadFile(file, docType);
+
+        const mappedStatus: UploadedFile["status"] =
+          result.status === "completed" ? "ready" : result.status === "failed" ? "error" : "processing";
         
         setUploadedFiles(prev => prev.map(f => 
           f.id === tempId 
-            ? { ...f, id: result.fileId, status: "ready" as const, preview: result.textPreview }
+            ? { ...f, id: result.documentId, status: mappedStatus }
             : f
         ));
-        setSelectedFileIds(prev => [...prev, result.fileId]);
+        setSelectedFileIds(prev => [...prev, result.documentId]);
       } catch (err) {
         console.error("Upload failed:", err);
         setUploadedFiles(prev => prev.map(f => 
@@ -338,7 +356,7 @@ export default function NewDashboardPage() {
     }
     
     const text = input.trim();
-    const currentAttachments = uploadedFiles.filter(f => f.status === "ready" && selectedFileIds.includes(f.id));
+    const currentAttachments = uploadedFiles.filter(f => selectedFileIds.includes(f.id));
     
     setInput("");
     const localId = `m-${Date.now()}`;
@@ -363,6 +381,7 @@ export default function NewDashboardPage() {
         message: text,
         feature,
         documentType: selectedTool === "document_builder" && selectedDocumentType !== 'analyze' ? selectedDocumentType : undefined,
+        // IMPORTANT: these are canonical FastAPI document_ids
         attachmentIds: selectedFileIds.length > 0 ? selectedFileIds : undefined,
       });
       
@@ -398,6 +417,9 @@ export default function NewDashboardPage() {
         draftKey,
       };
       setMessages((prev) => [...prev, aiMsg]);
+
+      // Refresh chat sessions so the sidebar shows the latest conversation.
+      loadRecentChats();
       
       // Clear selected files after sending
       setSelectedFileIds([]);
@@ -408,7 +430,7 @@ export default function NewDashboardPage() {
     } finally {
       setIsSending(false);
     }
-  }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles]);
+  }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles, loadRecentChats]);
 
   return (
     <div className="flex h-screen bg-white">
@@ -651,7 +673,11 @@ export default function NewDashboardPage() {
                           ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white" 
                           : "bg-gray-100 text-gray-800"
                       }`}>
-                        <div className="whitespace-pre-wrap leading-relaxed text-sm">{m.content}</div>
+                        {m.role === "user" ? (
+                          <div className="whitespace-pre-wrap leading-relaxed text-sm">{m.content}</div>
+                        ) : (
+                          <MarkdownContent content={m.content} className="text-sm" />
+                        )}
                       </div>
                       
                       {/* Attachments Display */}
@@ -918,11 +944,12 @@ export default function NewDashboardPage() {
                           key={`upload-${file.id}-${idx}`} 
                           className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs border ${
                             file.status === "uploading" ? "bg-blue-50 border-blue-200" :
+                            file.status === "processing" ? "bg-amber-50 border-amber-200" :
                             file.status === "error" ? "bg-red-50 border-red-200" :
                             "bg-green-50 border-green-200"
                           }`}
                         >
-                          {file.status === "uploading" ? (
+                          {file.status === "uploading" || file.status === "processing" ? (
                             <Loader2 size={12} className="animate-spin text-blue-500" />
                           ) : file.status === "error" ? (
                             <AlertCircle size={12} className="text-red-500" />
@@ -949,13 +976,26 @@ export default function NewDashboardPage() {
                       .filter(pf => selectedFileIds.includes(pf.id) && !uploadedFiles.find(uf => uf.id === pf.id))
                       .map((file, idx) => {
                         const FileIcon = getFileIcon(file.type);
+                        const chipStatus = file.status === "failed" ? "error" : file.status === "completed" ? "ready" : "processing";
                         return (
                           <div 
                             key={`prev-chip-${file.id}-${idx}`} 
-                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs border bg-green-50 border-green-200"
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs border ${
+                              chipStatus === "processing" ? "bg-amber-50 border-amber-200" :
+                              chipStatus === "error" ? "bg-red-50 border-red-200" :
+                              "bg-green-50 border-green-200"
+                            }`}
                           >
-                            <FileIcon size={12} className="text-green-600" />
-                            <Check size={12} className="text-green-600" />
+                            {chipStatus === "processing" ? (
+                              <Loader2 size={12} className="animate-spin text-amber-600" />
+                            ) : chipStatus === "error" ? (
+                              <AlertCircle size={12} className="text-red-500" />
+                            ) : (
+                              <>
+                                <FileIcon size={12} className="text-green-600" />
+                                <Check size={12} className="text-green-600" />
+                              </>
+                            )}
                             <span className="max-w-[100px] truncate font-medium">{file.name}</span>
                             <span className="text-gray-400">{formatFileSize(file.size)}</span>
                             <button 
@@ -1057,6 +1097,7 @@ export default function NewDashboardPage() {
                       {previousFiles.map((file, idx) => {
                         const FileIcon = getFileIcon(file.type);
                         const isSelected = selectedFileIds.includes(file.id);
+                        const status = file.status === "failed" ? "error" : file.status === "completed" ? "ready" : "processing";
                         return (
                           <button
                             key={`prev-${file.id}-${idx}`}
@@ -1067,7 +1108,13 @@ export default function NewDashboardPage() {
                                 : "bg-white border-gray-200 hover:bg-gray-100 text-gray-700"
                             }`}
                           >
-                            <FileIcon size={14} className={isSelected ? "text-blue-500" : "text-gray-400"} />
+                            {status === "processing" ? (
+                              <Loader2 size={14} className="animate-spin text-amber-600" />
+                            ) : status === "error" ? (
+                              <AlertCircle size={14} className="text-red-500" />
+                            ) : (
+                              <FileIcon size={14} className={isSelected ? "text-blue-500" : "text-gray-400"} />
+                            )}
                             <div className="flex-1 min-w-0">
                               <div className="truncate font-medium">{file.name}</div>
                               <div className="text-[10px] text-gray-400">{formatFileSize(file.size)}</div>

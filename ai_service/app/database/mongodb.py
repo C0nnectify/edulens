@@ -2,7 +2,7 @@
 MongoDB connection and operations
 """
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection, AsyncIOMotorGridFSBucket
 from typing import Optional
 from app.config import settings
 from app.utils.logger import logger
@@ -73,6 +73,12 @@ def get_documents_collection() -> AsyncIOMotorCollection:
     return db["documents_metadata"]
 
 
+def get_gridfs_bucket(bucket_name: str = "user_uploads") -> AsyncIOMotorGridFSBucket:
+    """Return a GridFS bucket for storing user-uploaded file blobs."""
+    db = get_database()
+    return AsyncIOMotorGridFSBucket(db, bucket_name=bucket_name)
+
+
 def get_vectors_collection(user_id: str) -> AsyncIOMotorCollection:
     """
     Get user-specific vectors collection
@@ -133,6 +139,9 @@ async def create_indexes():
     await docs_collection.create_index("file_hash")
     await docs_collection.create_index([("user_id", 1), ("tags", 1)])
     await docs_collection.create_index("uploaded_at")
+    await docs_collection.create_index([("user_id", 1), ("status", 1), ("uploaded_at", -1)])
+    await docs_collection.create_index([("user_id", 1), ("file_hash", 1)])
+    await docs_collection.create_index("gridfs_id")
 
     # Admission data indexes
     admission_collection = get_admission_data_collection()

@@ -16,6 +16,7 @@ export type UserFile = {
   uploadedAt?: string;
   source?: string;
   textPreview?: string;
+  processingStatus?: 'pending' | 'processing' | 'completed' | 'failed' | string;
 };
 
 export type UploadProgress = {
@@ -40,14 +41,11 @@ export function useUserFiles() {
     setError(null);
     
     try {
-      const userId = getOrCreateUserId();
       const limit = options?.limit || 100;
       const page = options?.page || 1;
       
       const response = await fetch(`/api/user-files?limit=${limit}&page=${page}`, {
-        headers: {
-          'x-user-id': userId,
-        },
+        headers: {},
       });
       
       if (!response.ok) {
@@ -85,7 +83,6 @@ export function useUserFiles() {
     }));
     
     try {
-      const userId = getOrCreateUserId();
       const formData = new FormData();
       formData.append('file', file);
       formData.append('doc_type', options?.docType || 'document');
@@ -95,9 +92,6 @@ export function useUserFiles() {
       
       const response = await fetch('/api/user-files', {
         method: 'POST',
-        headers: {
-          'x-user-id': userId,
-        },
         body: formData,
       });
       
@@ -110,6 +104,13 @@ export function useUserFiles() {
       if (!data.success || !data.file) {
         throw new Error(data.error || 'Upload failed');
       }
+
+      const normalizedStatus =
+        data.file.processingStatus === 'completed'
+          ? 'completed'
+          : data.file.processingStatus === 'failed'
+            ? 'error'
+            : 'processing';
       
       // Update progress to completed
       setUploadProgress(prev => {
@@ -118,7 +119,7 @@ export function useUserFiles() {
           fileId: data.file.id,
           fileName: data.file.name,
           progress: 100,
-          status: 'completed',
+          status: normalizedStatus,
         });
         newMap.delete(tempId);
         return newMap;
@@ -150,28 +151,35 @@ export function useUserFiles() {
    */
   const deleteFile = useCallback(async (fileId: string): Promise<boolean> => {
     try {
-      const userId = getOrCreateUserId();
-      const response = await fetch(`/api/user-files?id=${fileId}`, {
+      setError(null);
+      const response = await fetch(`/api/user-files?id=${encodeURIComponent(fileId)}`, {
         method: 'DELETE',
-        headers: {
-          'x-user-id': userId,
-        },
+        headers: {},
       });
-      
-      if (!response.ok) {
-        throw new Error('Delete failed');
+
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
       }
-      
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Delete failed');
+
+      if (!response.ok) {
+        const message = data?.error || data?.detail || `Delete failed (${response.status})`;
+        throw new Error(message);
+      }
+
+      if (!data?.success) {
+        const message = data?.error || 'Delete failed';
+        throw new Error(message);
       }
       
       // Remove from local state
       setFiles(prev => prev.filter(f => f.id !== fileId));
       return true;
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Delete failed';
+      setError(errorMessage);
       console.error('Error deleting file:', err);
       return false;
     }
@@ -198,17 +206,4 @@ export function useUserFiles() {
     deleteFile,
     clearUploadProgress,
   };
-}
-
-/**
- * Get or create a user ID for file storage
- */
-function getOrCreateUserId(): string {
-  if (typeof window === "undefined") return "demo-user";
-  const key = "edulens_user_id";
-  const existing = window.localStorage.getItem(key);
-  if (existing && existing.trim().length > 0) return existing;
-  const generated = `user-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
-  window.localStorage.setItem(key, generated);
-  return generated;
 }

@@ -1,22 +1,45 @@
 /**
- * Centralized User Files API with MongoDB and ChromaDB
- * 
- * This API provides a unified interface for managing user files across
- * the application with:
- * - MongoDB for file metadata storage
- * - ChromaDB for semantic search embeddings
- * - OCR for scanned PDFs and images
- * - Intelligent text extraction and processing
- * 
- * Files uploaded here are accessible in:
- * - Document Builder (SOP, LOR, CV, Resume creation)
- * - Document Analysis
- * - Chat attachments
- * - Document Vault
+ * Centralized User Files API (Compatibility Shim)
+ *
+ * IMPORTANT:
+ * - The canonical document system is the FastAPI Document AI service.
+ * - This route exists to keep legacy UI pieces working while ensuring
+ *   “upload anywhere, reuse everywhere” by reading/writing the same store.
+ *
+ * Backing store:
+ * - Mongo GridFS for blobs + documents_metadata for metadata (FastAPI)
+ * - Chroma for chunks/embeddings (FastAPI background ingestion)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { FileProcessingService } from '@/lib/services/fileProcessing';
+import { auth } from '@/lib/auth-config';
+
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+
+type FastApiDocument = {
+  document_id: string;
+  filename: string;
+  content_type?: string | null;
+  file_type?: string | null;
+  file_size?: number | null;
+  uploaded_at?: string | null;
+  status?: 'pending' | 'processing' | 'completed' | 'failed';
+};
+
+function normalizeFastApiError(data: any, fallback: string) {
+  const raw = data?.detail ?? data?.error ?? fallback;
+  if (typeof raw === 'string') return raw;
+  try {
+    return JSON.stringify(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+async function getSessionUserId(request: NextRequest): Promise<string | null> {
+  const session = await auth.api.getSession({ headers: request.headers });
+  return session?.user?.id ?? null;
+}
 
 /**
  * GET /api/user-files
@@ -24,67 +47,47 @@ import { FileProcessingService } from '@/lib/services/fileProcessing';
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id') || 'demo-user';
     const searchParams = request.nextUrl.searchParams;
-    
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const page = parseInt(searchParams.get('page') || '1');
-    const skip = (page - 1) * limit;
-    const documentType = searchParams.get('documentType') || undefined;
-    const tagsParam = searchParams.get('tags');
-    const tags = tagsParam ? tagsParam.split(',').filter(Boolean) : undefined;
-    const sortBy = (searchParams.get('sortBy') as 'uploadedAt' | 'fileName' | 'fileSize') || 'uploadedAt';
-    const sortOrder = (searchParams.get('sortOrder') as 'asc' | 'desc') || 'desc';
-    const search = searchParams.get('search') || undefined;
-
-    let result;
-    
-    // If search query provided, use semantic search
-    if (search) {
-      const files = await FileProcessingService.searchFiles(userId, search, {
-        limit,
-        documentType,
-        tags,
-      });
-      result = {
-        files,
-        total: files.length,
-      };
-    } else {
-      // Regular fetch from MongoDB
-      result = await FileProcessingService.getUserFiles(userId, {
-        limit,
-        skip,
-        documentType,
-        tags,
-        sortBy,
-        sortOrder,
-      });
+    const userId = await getSessionUserId(request);
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized', files: [] }, { status: 401 });
     }
 
-    // Transform to API format
-    const apiFiles = result.files.map((f) => ({
-      id: f.fileId,
-      name: f.fileName,
-      type: f.mimeType,
-      size: f.fileSize,
-      uploadedAt: f.uploadedAt.toISOString(),
-      documentType: f.documentType,
-      tags: f.tags,
-      textPreview: f.textPreview,
-      processingStatus: f.processingStatus,
-      ocrStatus: f.ocrStatus,
-      embeddingStatus: f.embeddingStatus,
-      wordCount: f.wordCount,
-      chunkCount: f.chunkCount,
-      category: f.category,
-      source: 'mongodb',
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const tags = searchParams.get('tags') || undefined;
+
+    const fastApiUrl = new URL(`${AI_SERVICE_URL}/api/v1/documents`);
+    fastApiUrl.searchParams.set('page', String(page));
+    fastApiUrl.searchParams.set('page_size', String(limit));
+    if (tags) fastApiUrl.searchParams.set('tags', tags);
+
+    const response = await fetch(fastApiUrl.toString(), {
+      headers: { 'x-user-id': userId },
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = normalizeFastApiError(data, 'Failed to fetch files');
+      return NextResponse.json({ success: false, error: message, files: [] }, { status: response.status });
+    }
+
+    const docs: FastApiDocument[] = Array.isArray(data?.documents) ? (data.documents as FastApiDocument[]) : [];
+
+    const apiFiles = docs.map((d) => ({
+      id: d.document_id,
+      name: d.filename,
+      type: d.content_type || d.file_type || 'application/octet-stream',
+      size: d.file_size ?? 0,
+      uploadedAt: d.uploaded_at ?? undefined,
+      processingStatus: d.status,
+      source: 'document_ai',
     }));
 
     return NextResponse.json({
       success: true,
       files: apiFiles,
-      total: result.total,
+      total: typeof data?.total === 'number' ? data.total : apiFiles.length,
       page,
       limit,
     });
@@ -111,12 +114,15 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id') || 'demo-user';
+    const userId = await getSessionUserId(request);
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    const docType = formData.get('doc_type') as string || 'other';
-    const tagsParam = formData.get('tags') as string || '';
-    const generateEmbeddings = formData.get('generate_embeddings') !== 'false';
+    const docType = (formData.get('doc_type') as string) || 'general';
+    const tagsParam = (formData.get('tags') as string) || '';
 
     if (!file) {
       return NextResponse.json(
@@ -125,59 +131,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (max 50MB)
-    const maxSize = 50 * 1024 * 1024; // 50MB
-    if (file.size > maxSize) {
-      return NextResponse.json(
-        { success: false, error: 'File size exceeds 50MB limit' },
-        { status: 400 }
-      );
-    }
+    const tags = tagsParam ? tagsParam.split(',').map((t) => t.trim()).filter(Boolean) : [];
+    const mergedTags = Array.from(new Set([docType, ...tags].filter(Boolean)));
 
-    // Validate file type
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'text/markdown',
-      'image/jpeg',
-      'image/png',
-      'image/jpg',
-    ];
-    
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Unsupported file type. Allowed: PDF, Word, Text, Markdown, Images' 
-        },
-        { status: 400 }
-      );
-    }
+    const outgoing = new FormData();
+    outgoing.append('file', file);
+    outgoing.append('tags', mergedTags.join(','));
 
-    const tags = tagsParam ? tagsParam.split(',').filter(Boolean) : [];
-
-    // Process file (text extraction, OCR, embeddings)
-    const userFile = await FileProcessingService.processFile(file, userId, {
-      documentType: docType,
-      tags,
-      generateEmbeddings,
+    const response = await fetch(`${AI_SERVICE_URL}/api/v1/documents/upload`, {
+      method: 'POST',
+      headers: {
+        'x-user-id': userId,
+      },
+      body: outgoing,
     });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = normalizeFastApiError(data, 'Failed to upload file');
+      return NextResponse.json({ success: false, error: message }, { status: response.status });
+    }
 
     return NextResponse.json({
       success: true,
       file: {
-        id: userFile.fileId,
-        name: userFile.fileName,
-        type: userFile.mimeType,
-        size: userFile.fileSize,
-        uploadedAt: userFile.uploadedAt.toISOString(),
-        documentType: userFile.documentType,
-        tags: userFile.tags,
-        textPreview: userFile.textPreview,
-        processingStatus: userFile.processingStatus,
-        message: 'File uploaded successfully. Processing in background...',
+        id: data.document_id,
+        name: data.filename,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+        processingStatus: data.status,
+        source: 'document_ai',
+        message: data.message || 'File uploaded successfully. Processing in background…',
       },
     });
   } catch (error) {
@@ -198,7 +183,10 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id') || 'demo-user';
+    const userId = await getSessionUserId(request);
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
     const url = new URL(request.url);
     const fileId = url.searchParams.get('id');
 
@@ -209,19 +197,24 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const deleted = await FileProcessingService.deleteFile(fileId, userId);
+    const response = await fetch(`${AI_SERVICE_URL}/api/v1/documents/${encodeURIComponent(fileId)}` as string, {
+      method: 'DELETE',
+      headers: { 'x-user-id': userId },
+    });
 
-    if (!deleted) {
-      return NextResponse.json(
-        { success: false, error: 'File not found or already deleted' },
-        { status: 404 }
-      );
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = normalizeFastApiError(data, 'Delete failed');
+      console.error('[api/user-files] Delete failed', {
+        status: response.status,
+        fileId,
+        userId,
+        message,
+      });
+      return NextResponse.json({ success: false, error: message }, { status: response.status });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'File deleted successfully',
-    });
+    return NextResponse.json({ success: true, message: 'File deleted successfully' });
   } catch (error) {
     console.error('Error deleting file:', error);
     return NextResponse.json(

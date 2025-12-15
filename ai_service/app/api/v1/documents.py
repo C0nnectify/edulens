@@ -3,6 +3,8 @@ Document upload and management endpoints
 """
 
 import uuid
+import os
+import inspect
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, Query
@@ -22,7 +24,9 @@ from app.services import (
     EmbeddingService,
 )
 from app.database.mongodb import get_documents_collection
+from app.database.mongodb import get_gridfs_bucket
 from app.database.vector_db import VectorDatabase
+from app.services.gridfs_tempfile import gridfs_to_tempfile
 from app.utils import (
     calculate_file_hash,
     validate_file_type,
@@ -37,7 +41,9 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
 async def process_document_background(
-    file_path: str,
+    storage_backend: str,
+    file_path: Optional[str],
+    gridfs_id: Optional[str],
     file_hash: str,
     document_id: str,
     tracking_id: str,
@@ -70,12 +76,34 @@ async def process_document_background(
         vector_db = VectorDatabase(user_id)
         docs_collection = get_documents_collection()
 
-        # Extract text based on file type
-        if file_type == 'image':
-            ocr_result = await ocr_service.extract_text_from_image(file_path)
-            text = ocr_result["text"]
-        else:
-            text, _ = await doc_processor.process_document(file_path)
+        # Materialize to a local path (processors expect file paths)
+        tmp_path: Optional[str] = None
+        try:
+            if storage_backend == "gridfs":
+                if not gridfs_id:
+                    raise ValueError("gridfs_id is required for gridfs backend")
+                from pathlib import Path
+                suffix = Path(filename).suffix
+                tmp = await gridfs_to_tempfile(gridfs_id, suffix=suffix)
+                tmp_path = tmp.path
+                local_path = tmp_path
+            else:
+                if not file_path:
+                    raise ValueError("file_path is required for disk backend")
+                local_path = file_path
+
+            # Extract text based on file type
+            if file_type == 'image':
+                ocr_result = await ocr_service.extract_text_from_image(local_path)
+                text = ocr_result["text"]
+            else:
+                text, _ = await doc_processor.process_document(local_path)
+        finally:
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
         # Validate extracted text
         if not doc_processor.validate_extracted_text(text):
@@ -88,6 +116,7 @@ async def process_document_background(
                 "document_id": document_id,
                 "tracking_id": tracking_id,
                 "filename": filename,
+                "tags": tags,
             }
         )
 
@@ -108,6 +137,8 @@ async def process_document_background(
                 chunk_index=idx,
                 total_chunks=len(chunks_data),
                 metadata={
+                    "filename": filename,
+                    "tags": tags,
                     "word_count": chunk_data.get("word_count", 0),
                     "char_count": chunk_data.get("char_count", 0),
                 }
@@ -135,7 +166,11 @@ async def process_document_background(
         logger.info(f"Successfully processed document {document_id} with {len(chunks)} chunks")
 
     except Exception as e:
-        logger.error(f"Error processing document {document_id}: {e}")
+        # Include stack trace to diagnose background processing failures
+        try:
+            logger.exception(f"Error processing document {document_id}: {e}")
+        except Exception:
+            logger.error(f"Error processing document {document_id}: {e}")
 
         # Update document status to failed
         try:
@@ -202,8 +237,30 @@ async def upload_document(
         document_id = str(uuid.uuid4())
         tracking_id = str(uuid.uuid4())
 
-        # Save file to disk
-        file_path = await save_upload_file(file, user_id, file_hash)
+        # Store file blob in Mongo GridFS (canonical storage)
+        await file.seek(0)
+        bucket = get_gridfs_bucket(bucket_name="user_uploads")
+        grid_in = bucket.open_upload_stream(
+            filename=file.filename,
+            metadata={
+                "user_id": user_id,
+                "file_hash": file_hash,
+                "document_id": document_id,
+                "tracking_id": tracking_id,
+                "content_type": file.content_type,
+            },
+        )
+        try:
+            while chunk := await file.read(8192):
+                await grid_in.write(chunk)
+        finally:
+            close_result = grid_in.close()
+            if inspect.isawaitable(close_result):
+                await close_result
+            await file.seek(0)
+
+        gridfs_id = str(grid_in._id)
+        file_path = None
 
         # Determine file type
         from pathlib import Path
@@ -221,7 +278,10 @@ async def upload_document(
             filename=file.filename,
             file_hash=file_hash,
             file_type=file_type,
+            storage_backend="gridfs",
             file_path=file_path,
+            gridfs_id=gridfs_id,
+            content_type=file.content_type,
             file_size=file_size,
             tags=tag_list,
             total_chunks=0,
@@ -234,7 +294,9 @@ async def upload_document(
         # Process document in background
         background_tasks.add_task(
             process_document_background,
-            file_path=file_path,
+            storage_backend="gridfs",
+            file_path=None,
+            gridfs_id=gridfs_id,
             file_hash=file_hash,
             document_id=document_id,
             tracking_id=tracking_id,
@@ -479,8 +541,15 @@ async def delete_document(
         vector_db = VectorDatabase(user_id)
         deleted_chunks = await vector_db.delete_document_chunks(document_id)
 
-        # Delete file from disk
-        if doc.get("file_path"):
+        # Delete stored file (GridFS preferred, but keep disk backward compatibility)
+        if doc.get("storage_backend") == "gridfs" and doc.get("gridfs_id"):
+            try:
+                from bson import ObjectId
+                bucket = get_gridfs_bucket(bucket_name="user_uploads")
+                await bucket.delete(ObjectId(doc["gridfs_id"]))
+            except Exception:
+                pass
+        elif doc.get("file_path"):
             await delete_file(doc["file_path"])
 
         # Delete metadata

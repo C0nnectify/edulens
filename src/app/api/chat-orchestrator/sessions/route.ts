@@ -1,16 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth-config";
+import { getChatCollections } from "@/lib/db/chatHistory";
 
 export async function GET(req: NextRequest) {
-  const base = process.env.NEXT_PUBLIC_AI_SERVICE_URL || "http://localhost:8000";
-  const userId = req.headers.get("x-user-id") || "demo-user";
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const userId = session.user.id;
+
   try {
-    const resp = await fetch(`${base}/chat-agent/sessions`, {
-      headers: { "x-user-id": userId },
+    const { sessions } = await getChatCollections();
+    const docs = await sessions
+      .find({ userId })
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .toArray();
+
+    return NextResponse.json({
+      sessions: docs.map((s) => ({
+        id: s.sessionId,
+        title: s.title,
+        updatedAt: s.updatedAt?.toISOString?.() ? s.updatedAt.toISOString() : undefined,
+        document_type: s.documentType ?? null,
+      })),
     });
-    if (!resp.ok) return NextResponse.json({ error: "Backend error" }, { status: resp.status });
-    const data = await resp.json();
-    return NextResponse.json(data);
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Network error" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "Failed to load sessions" }, { status: 500 });
   }
 }

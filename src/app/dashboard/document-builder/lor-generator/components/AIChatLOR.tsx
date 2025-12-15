@@ -14,6 +14,7 @@ import { generateLOR, rewriteText } from '../../sop-generator/lib/api';
 import type { EditorHandle } from '../../sop-generator/components/Editor';
 import UploadPanel from '../../sop-generator/components/UploadPanel';
 import { normalizeEditorHtml, normalizeInlineHtml, jsonToHtmlWithMarkdown, ensureDocumentTitle, ensureEditorJsonTitle } from '../../sop-generator/lib/markdown';
+import { MarkdownContent } from '@/components/chat/MarkdownContent';
 
 interface Message { id: string; role: 'user' | 'assistant'; content: string; timestamp: Date; }
 
@@ -300,7 +301,11 @@ export default function AIChatLOR({
                   </div>
                 )}
                 <div className="flex-1">
-                  <p className="text-sm leading-relaxed">{m.content}</p>
+                  {m.role === 'assistant' ? (
+                    <MarkdownContent content={m.content} className="text-sm" />
+                  ) : (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                  )}
                   <span className="text-xs opacity-70 mt-1 block">
                     {m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
