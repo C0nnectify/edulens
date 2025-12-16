@@ -1,10 +1,10 @@
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ResumeListView } from '@/components/dashboard/resume/ResumeListView';
 
-export default function ResumesPage() {
+export default function CVsPage() {
   return (
     <DashboardLayout>
-      <ResumeListView />
+      <ResumeListView documentType="cv" />
     </DashboardLayout>
   );
 }

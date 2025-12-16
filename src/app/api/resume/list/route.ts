@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongoose';
 import { ResumeModel } from '@/lib/db/models/Resume';
-import { Resume } from '@/types/resume';
 
 /**
  * GET /api/resume/list
@@ -32,7 +31,7 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     // Build query
-    const query: any = { userId };
+    const query: Record<string, unknown> = { userId };
 
     if (isFavorite !== null) {
       query['metadata.isFavorite'] = isFavorite === 'true';
@@ -57,13 +56,13 @@ export async function GET(request: NextRequest) {
       .sort({ [sortBy]: sortOrder })
       .skip(skip)
       .limit(limit)
-      .lean();
+      .lean<Array<Record<string, unknown> & { _id: unknown }>>();
 
     return NextResponse.json({
       success: true,
-      resumes: resumes.map(resume => ({
+      resumes: resumes.map((resume) => ({
         ...resume,
-        _id: resume._id.toString(),
+        _id: String(resume._id),
       })),
       pagination: {
         total,

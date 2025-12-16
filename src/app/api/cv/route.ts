@@ -1,9 +1,9 @@
-// GET /api/resume - List all resumes for authenticated user
-// POST /api/resume - Create new resume
+// GET /api/cv - List all CVs for authenticated user
+// POST /api/cv - Create new CV (validated)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongoose';
-import { ResumeModel } from '@/lib/db/models/Resume';
+import { CVModel } from '@/lib/db/models/CV';
 import { resumeSchema, paginationSchema } from '@/lib/validations/resume';
 import {
   authenticateRequest,
@@ -14,10 +14,8 @@ import {
   checkRateLimit,
 } from '@/lib/api-utils';
 
-// GET: List all resumes for authenticated user
 export async function GET(req: NextRequest) {
   try {
-    // Authenticate user
     const authResult = await authenticateRequest(req);
     if (!authResult.authenticated || !authResult.user) {
       return errorResponse(authResult.error || 'Unauthorized', 401);
@@ -25,12 +23,10 @@ export async function GET(req: NextRequest) {
 
     const user = authResult.user;
 
-    // Rate limiting
     if (!checkRateLimit(user.id, 100, 60000)) {
       return errorResponse('Rate limit exceeded', 429);
     }
 
-    // Parse query parameters
     const searchParams = req.nextUrl.searchParams;
     const paginationParams = {
       page: searchParams.get('page') || '1',
@@ -39,7 +35,6 @@ export async function GET(req: NextRequest) {
       search: searchParams.get('search') || undefined,
     };
 
-    // Validate pagination
     const validation = paginationSchema.safeParse(paginationParams);
     if (!validation.success) {
       return handleValidationError(validation.error);
@@ -47,13 +42,9 @@ export async function GET(req: NextRequest) {
 
     const { page, limit, sort, search } = validation.data;
 
-    // Connect to database
     await connectDB();
 
-    // Build query
     const query: Record<string, unknown> = { userId: user.id };
-
-    // Add search filter if provided
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -63,29 +54,22 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // Parse sort parameter
     const sortField = sort.startsWith('-') ? sort.slice(1) : sort;
     const sortDirection = sort.startsWith('-') ? -1 : 1;
 
-    // Execute query with pagination
-    const [resumes, totalCount] = await Promise.all([
-      ResumeModel
-        .find(query)
+    const [cvs, totalCount] = await Promise.all([
+      CVModel.find(query)
         .sort({ [sortField]: sortDirection })
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
-      ResumeModel.countDocuments(query),
+      CVModel.countDocuments(query),
     ]);
 
-    // Calculate pagination metadata
     const totalPages = Math.ceil(totalCount / limit);
 
-    // Log access
-    console.log(`User ${user.id} fetched ${resumes.length} resumes`);
-
     return successResponse({
-      resumes,
+      cvs,
       pagination: {
         page,
         limit,
@@ -100,10 +84,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Create new resume
 export async function POST(req: NextRequest) {
   try {
-    // Authenticate user
     const authResult = await authenticateRequest(req);
     if (!authResult.authenticated || !authResult.user) {
       return errorResponse(authResult.error || 'Unauthorized', 401);
@@ -111,52 +93,38 @@ export async function POST(req: NextRequest) {
 
     const user = authResult.user;
 
-    // Rate limiting
     if (!checkRateLimit(user.id, 20, 60000)) {
       return errorResponse('Rate limit exceeded', 429);
     }
 
-    // Parse request body
     const body = await req.json();
-
-    // Validate input
     const validation = resumeSchema.safeParse(body);
     if (!validation.success) {
       return handleValidationError(validation.error);
     }
 
-    // Connect to database
     await connectDB();
 
-    // Check user's resume count (limit to prevent abuse)
-    const resumeCount = await ResumeModel.countDocuments({
-      userId: user.id
-    });
-
-    if (resumeCount >= 20) {
-      return errorResponse('Resume limit reached. Please delete existing resumes before creating new ones.', 403);
+    const count = await CVModel.countDocuments({ userId: user.id });
+    if (count >= 20) {
+      return errorResponse('CV limit reached. Please delete existing CVs before creating new ones.', 403);
     }
 
-    // Create resume document
-    const resumeData = {
+    const cvData = {
       ...validation.data,
       userId: user.id,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    // Save to database
-    const resume = await ResumeModel.create(resumeData);
-
-    // Log creation
-    console.log(`User ${user.id} created resume ${resume._id}`);
+    const cv = await CVModel.create(cvData);
 
     return successResponse(
       {
-        id: resume._id.toString(),
-        ...resume.toObject()
+        id: cv._id.toString(),
+        ...cv.toObject(),
       },
-      'Resume created successfully',
+      'CV created successfully',
       201
     );
   } catch (error) {
@@ -164,7 +132,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// OPTIONS: Handle CORS preflight
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,

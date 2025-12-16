@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongoose';
-import { ResumeModel } from '@/lib/db/models/Resume';
+import { CVModel } from '@/lib/db/models/CV';
 import { IndustryTemplate } from '@/types/resume';
-import { getTemplateById } from '@/lib/templates/registry';
 import { authenticateRequest } from '@/lib/api-utils';
+import { getTemplateById } from '@/lib/templates/registry';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -18,8 +18,8 @@ function splitName(fullName?: string | null): { firstName: string; lastName: str
 }
 
 /**
- * POST /api/resume/create
- * Create a new resume
+ * POST /api/cv/create
+ * Create a new CV with safe defaults.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -37,9 +37,8 @@ export async function POST(request: NextRequest) {
     const title = typeof body.title === 'string' ? body.title : '';
     const template = typeof body.template === 'string' ? body.template : undefined;
     const industryTarget = typeof body.industryTarget === 'string' ? body.industryTarget : undefined;
-    const sourceResumeId = typeof body.sourceResumeId === 'string' ? body.sourceResumeId : undefined;
+    const sourceCvId = typeof body.sourceCvId === 'string' ? body.sourceCvId : undefined;
 
-    // Validate required fields
     if (!title) {
       return NextResponse.json(
         { success: false, error: 'Title is required' },
@@ -49,82 +48,56 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
-    // If duplicating from existing resume
-    if (sourceResumeId) {
-      const sourceResume = await ResumeModel.findOne({
-        _id: sourceResumeId,
-        userId: user.id,
-      }).lean<Record<string, unknown>>();
-
-      if (!sourceResume) {
+    if (sourceCvId) {
+      const source = await CVModel.findOne({ _id: sourceCvId, userId: user.id }).lean<Record<string, unknown>>();
+      if (!source) {
         return NextResponse.json(
-          { success: false, error: 'Source resume not found' },
+          { success: false, error: 'Source CV not found' },
           { status: 404 }
         );
       }
 
-      const sourceTitle = typeof sourceResume.title === 'string' ? sourceResume.title : 'Untitled Resume';
-      const sourceMetadata = asRecord(sourceResume.metadata);
+      const sourceTitle = typeof source.title === 'string' ? source.title : 'Untitled CV';
 
-      const duplicatedResume = {
-        ...sourceResume,
+      const duplicated: Record<string, unknown> = {
+        ...source,
         _id: undefined,
         userId: user.id,
-        title: title || `${sourceResume.title} (Copy)`,
+        title: title || `${sourceTitle} (Copy)`,
         createdAt: new Date(),
         updatedAt: new Date(),
-        metadata: {
-          ...sourceMetadata,
-          version: 1,
-          isFavorite: false,
-        },
       };
 
-      if (!title) {
-        (duplicatedResume as Record<string, unknown>).title = `${sourceTitle} (Copy)`;
-      }
-
-      const result = await ResumeModel.create(duplicatedResume);
+      const result = await CVModel.create(duplicated);
 
       return NextResponse.json({
         success: true,
-        resume: {
+        cv: {
           ...result.toObject(),
           _id: result._id.toString(),
         },
       });
     }
 
-    // Get template configuration if specified
-    let templateConfig = null;
     const templateId = template || industryTarget;
-    if (templateId) {
-      templateConfig = getTemplateById(templateId);
-    }
+    const templateConfig = templateId ? getTemplateById(templateId) : null;
 
-    // Create new resume with defaults
     const userRecord = asRecord(user);
     const { firstName, lastName } = splitName(typeof userRecord.name === 'string' ? userRecord.name : undefined);
     const email = typeof userRecord.email === 'string' ? userRecord.email : 'your.email@example.com';
 
-    const newResume: Record<string, unknown> = {
+    const newCv: Record<string, unknown> = {
       userId: user.id,
       title,
       template: template || IndustryTemplate.GENERIC_ATS_SIMPLE,
       industryTarget: industryTarget || IndustryTemplate.GENERIC_ATS_SIMPLE,
-
       personalInfo: {
         firstName,
         lastName,
         email,
         phone: '',
-        location: {
-          city: '',
-          state: '',
-          country: ''
-        },
+        location: { city: '', state: '', country: '' },
       },
-
       summary: '',
       experience: [],
       education: [],
@@ -133,7 +106,6 @@ export async function POST(request: NextRequest) {
       certifications: [],
       languages: [],
       customSections: [],
-
       metadata: {
         version: 1,
         isPublic: false,
@@ -151,24 +123,23 @@ export async function POST(request: NextRequest) {
         ],
         sectionVisibility: {},
       },
-
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    const result = await ResumeModel.create(newResume);
+    const result = await CVModel.create(newCv);
 
     return NextResponse.json({
       success: true,
-      resume: {
+      cv: {
         ...result.toObject(),
         _id: result._id.toString(),
       },
     });
   } catch (error) {
-    console.error('Error creating resume:', error);
+    console.error('Error creating CV:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to create resume' },
+      { success: false, error: 'Failed to create CV' },
       { status: 500 }
     );
   }

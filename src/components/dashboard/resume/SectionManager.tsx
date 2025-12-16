@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -183,21 +183,20 @@ interface SectionManagerProps {
 }
 
 export default function SectionManager({ resume, onUpdate }: SectionManagerProps) {
-  const [sections, setSections] = useState<SectionItem[]>(() => {
+  const buildSections = (r: Resume): SectionItem[] => {
     const defaultSections: SectionItem[] = [
       { id: 'personalInfo', name: 'Personal Information', type: 'personalInfo', visible: true, order: 0, required: true },
-      { id: 'summary', name: 'Professional Summary', type: 'summary', visible: !!resume.summary, order: 1 },
+      { id: 'summary', name: 'Professional Summary', type: 'summary', visible: !!r.summary, order: 1 },
       { id: 'experience', name: 'Work Experience', type: 'experience', visible: true, order: 2, required: true },
       { id: 'education', name: 'Education', type: 'education', visible: true, order: 3, required: true },
       { id: 'skills', name: 'Skills', type: 'skills', visible: true, order: 4, required: true },
-      { id: 'projects', name: 'Projects', type: 'projects', visible: (resume.projects?.length || 0) > 0, order: 5 },
-      { id: 'certifications', name: 'Certifications', type: 'certifications', visible: (resume.certifications?.length || 0) > 0, order: 6 },
-      { id: 'languages', name: 'Languages', type: 'languages', visible: (resume.languages?.length || 0) > 0, order: 7 },
+      { id: 'projects', name: 'Projects', type: 'projects', visible: (r.projects?.length || 0) > 0, order: 5 },
+      { id: 'certifications', name: 'Certifications', type: 'certifications', visible: (r.certifications?.length || 0) > 0, order: 6 },
+      { id: 'languages', name: 'Languages', type: 'languages', visible: (r.languages?.length || 0) > 0, order: 7 },
     ];
 
-    // Add custom sections
-    if (resume.customSections) {
-      resume.customSections.forEach((customSection) => {
+    if (r.customSections) {
+      r.customSections.forEach((customSection) => {
         defaultSections.push({
           id: customSection.id || `custom-${Date.now()}`,
           name: customSection.title,
@@ -208,9 +207,14 @@ export default function SectionManager({ resume, onUpdate }: SectionManagerProps
       });
     }
 
-    // Sort by order
     return defaultSections.sort((a, b) => a.order - b.order);
-  });
+  };
+
+  const [sections, setSections] = useState<SectionItem[]>(() => buildSections(resume));
+
+  useEffect(() => {
+    setSections(buildSections(resume));
+  }, [resume.summary, resume.projects, resume.certifications, resume.languages, resume.customSections]);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');

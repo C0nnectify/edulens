@@ -5,6 +5,10 @@ import { parseJSONResume } from '@/lib/parsers/json-resume';
 import { parseResumeText } from '@/lib/parsers/pdf';
 import { getTemplateById } from '@/lib/templates/registry';
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
 /**
  * POST /api/resume/import
  * Import resume from various formats
@@ -24,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let resumeData: any = {};
+    let resumeData: unknown = {};
     const warnings: string[] = [];
 
     // Parse based on type
@@ -62,9 +66,10 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
       }
-    } catch (parseError: any) {
+    } catch (parseError: unknown) {
+      const msg = parseError instanceof Error ? parseError.message : 'Unknown parse error';
       return NextResponse.json(
-        { success: false, error: `Failed to parse file: ${parseError.message}` },
+        { success: false, error: `Failed to parse file: ${msg}` },
         { status: 400 }
       );
     }
@@ -75,15 +80,18 @@ export async function POST(request: NextRequest) {
     // Create resume in database
     await connectDB();
 
+    const data = asRecord(resumeData);
+    const personalInfo = asRecord(data.personalInfo);
+
     const newResume = {
       userId,
-      title: resumeData.personalInfo?.fullName
-        ? `${resumeData.personalInfo.fullName}'s Resume`
+      title: typeof personalInfo.fullName === 'string'
+        ? `${personalInfo.fullName}'s Resume`
         : 'Imported Resume',
       template: template || 'generic-ats-simple',
       industryTarget: template || 'generic-ats-simple',
 
-      personalInfo: resumeData.personalInfo || {
+      personalInfo: Object.keys(personalInfo).length > 0 ? personalInfo : {
         firstName: '',
         lastName: '',
         email: '',
@@ -91,14 +99,14 @@ export async function POST(request: NextRequest) {
         location: { country: '' },
       },
 
-      summary: resumeData.summary || '',
-      experience: resumeData.experience || [],
-      education: resumeData.education || [],
-      skills: resumeData.skills || [],
-      projects: resumeData.projects || [],
-      certifications: resumeData.certifications || [],
-      languages: resumeData.languages || [],
-      customSections: resumeData.customSections || [],
+      summary: typeof data.summary === 'string' ? data.summary : '',
+      experience: Array.isArray(data.experience) ? data.experience : [],
+      education: Array.isArray(data.education) ? data.education : [],
+      skills: Array.isArray(data.skills) ? data.skills : [],
+      projects: Array.isArray(data.projects) ? data.projects : [],
+      certifications: Array.isArray(data.certifications) ? data.certifications : [],
+      languages: Array.isArray(data.languages) ? data.languages : [],
+      customSections: Array.isArray(data.customSections) ? data.customSections : [],
 
       metadata: {
         version: 1,

@@ -27,14 +27,28 @@ const personalInfoSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   country: z.string().min(1, 'Country is required'),
-  linkedIn: z.string().url().optional().or(z.literal('')),
-  github: z.string().url().optional().or(z.literal('')),
-  portfolio: z.string().url().optional().or(z.literal('')),
-  website: z.string().url().optional().or(z.literal('')),
+  // Accept free-form; we normalize to https://... on submit.
+  linkedIn: z.string().optional().or(z.literal('')),
+  github: z.string().optional().or(z.literal('')),
+  portfolio: z.string().optional().or(z.literal('')),
+  website: z.string().optional().or(z.literal('')),
   professionalTitle: z.string().optional(),
 });
 
 type PersonalInfoFormData = z.infer<typeof personalInfoSchema>;
+
+function normalizeUrl(value: unknown): string {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return '';
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(withScheme);
+    if (!parsed.hostname || !parsed.hostname.includes('.')) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
 
 interface PersonalInfoFormProps {
   resume: Resume;
@@ -65,6 +79,11 @@ export default function PersonalInfoForm({
   });
 
   const onSubmit = (data: PersonalInfoFormData) => {
+    const linkedIn = normalizeUrl(data.linkedIn);
+    const github = normalizeUrl(data.github);
+    const portfolio = normalizeUrl(data.portfolio);
+    const website = normalizeUrl(data.website);
+
     const personalInfo: PersonalInfo = {
       fullName: data.fullName,
       email: data.email,
@@ -74,11 +93,11 @@ export default function PersonalInfoForm({
         state: data.state,
         country: data.country,
       },
-      linkedIn: data.linkedIn,
-      linkedin: data.linkedIn,
-      github: data.github,
-      portfolio: data.portfolio,
-      website: data.website,
+      linkedIn,
+      linkedin: linkedIn,
+      github,
+      portfolio,
+      website,
       professionalTitle: data.professionalTitle,
     };
 
@@ -94,7 +113,24 @@ export default function PersonalInfoForm({
       }
     });
     return () => subscription.unsubscribe();
-  }, [form.watch]);
+  }, [form, onUpdate]);
+
+  // Keep form in sync when resume loads/changes.
+  useEffect(() => {
+    form.reset({
+      fullName: resume.personalInfo.fullName || '',
+      email: resume.personalInfo.email || '',
+      phone: resume.personalInfo.phone || '',
+      city: resume.personalInfo.location?.city || '',
+      state: resume.personalInfo.location?.state || '',
+      country: resume.personalInfo.location?.country || '',
+      linkedIn: resume.personalInfo.linkedIn || resume.personalInfo.linkedin || '',
+      github: resume.personalInfo.github || '',
+      portfolio: resume.personalInfo.portfolio || '',
+      website: resume.personalInfo.website || '',
+      professionalTitle: resume.personalInfo.professionalTitle || '',
+    });
+  }, [form, resume.personalInfo]);
 
   return (
     <Card className="p-6">

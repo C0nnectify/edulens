@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -70,6 +70,11 @@ export default function EducationForm({
   );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  // Keep local list in sync when resume loads/changes.
+  useEffect(() => {
+    setEducationList(resume.education || []);
+  }, [resume.education]);
 
   const form = useForm<EducationFormData>({
     resolver: zodResolver(educationSchema),

@@ -3,6 +3,8 @@ import { connectDB } from '@/lib/mongoose';
 import { ResumeModel } from '@/lib/db/models/Resume';
 import { ObjectId } from 'mongodb';
 import { exportToJSON, exportToJSONResume, exportToTXT, generateJSONFilename, generateTXTFilename } from '@/lib/exporters/json';
+import { authenticateRequest } from '@/lib/api-utils';
+import { resumeApiToUi } from '@/lib/resume/mappers';
 
 /**
  * GET /api/resume/:id/export
@@ -13,6 +15,14 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.authenticated || !authResult.user) {
+      return NextResponse.json(
+        { success: false, error: authResult.error || 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const { id } = params;
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format') || 'json';
@@ -26,7 +36,7 @@ export async function GET(
 
     // Fetch resume
     await connectDB();
-    const resume = await ResumeModel.findById(id).lean();
+    const resume = await ResumeModel.findOne({ _id: id, userId: authResult.user.id }).lean();
 
     if (!resume) {
       return NextResponse.json(
@@ -39,22 +49,24 @@ export async function GET(
     let filename: string;
     let contentType: string;
 
+    const uiResume = resumeApiToUi(resume);
+
     switch (format) {
       case 'json':
-        blob = exportToJSON(resume as any);
-        filename = generateJSONFilename(resume as any, 'native');
+        blob = exportToJSON(uiResume);
+        filename = generateJSONFilename(uiResume, 'native');
         contentType = 'application/json';
         break;
 
       case 'jsonresume':
-        blob = exportToJSONResume(resume as any);
-        filename = generateJSONFilename(resume as any, 'jsonresume');
+        blob = exportToJSONResume(uiResume);
+        filename = generateJSONFilename(uiResume, 'jsonresume');
         contentType = 'application/json';
         break;
 
       case 'txt':
-        blob = exportToTXT(resume as any);
-        filename = generateTXTFilename(resume as any);
+        blob = exportToTXT(uiResume);
+        filename = generateTXTFilename(uiResume);
         contentType = 'text/plain';
         break;
 

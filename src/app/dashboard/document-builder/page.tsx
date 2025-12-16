@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,35 +27,142 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+const coerceId = (value: unknown): string => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (isRecord(value) && typeof value.$oid === 'string') return value.$oid;
+  try {
+    return String(value);
+  } catch {
+    return '';
+  }
+};
+
+const coerceISODate = (value: unknown, fallbackISO: string): string => {
+  const unwrapped =
+    isRecord(value) && (typeof value.$date === 'string' || typeof value.$date === 'number')
+      ? value.$date
+      : value;
+
+  const date =
+    unwrapped instanceof Date
+      ? unwrapped
+      : new Date(typeof unwrapped === 'string' || typeof unwrapped === 'number' ? unwrapped : '');
+  return Number.isNaN(date.getTime()) ? fallbackISO : date.toISOString();
+};
+
 export default function DocumentBuilderPage() {
   const [documents, setDocuments] = useState<{
     sops: SOPSummary[];
     lors: SOPSummary[];
-  }>({ sops: [], lors: [] });
-  const [loading, setLoading] = useState(true);
+    resumes: SOPSummary[];
+    cvs: SOPSummary[];
+  }>({ sops: [], lors: [], resumes: [], cvs: [] });
 
-  useEffect(() => {
-    loadDocuments();
-  }, []);
-
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     try {
-      const [sops, lors] = await Promise.all([
+      const fetchResumeSummaries = async (): Promise<SOPSummary[]> => {
+        const res = await fetch('/api/resume?limit=10&sort=-updatedAt', { method: 'GET' });
+        const data: unknown = await res.json().catch(() => null);
+        const items: unknown[] =
+          (isRecord(data) && isRecord(data.data) && Array.isArray(data.data.resumes)
+            ? (data.data.resumes as unknown[])
+            : isRecord(data) && Array.isArray(data.resumes)
+              ? (data.resumes as unknown[])
+              : isRecord(data) && Array.isArray(data.data)
+                ? (data.data as unknown[])
+                : Array.isArray(data)
+                  ? data
+                  : []) ?? [];
+
+        if (!Array.isArray(items)) return [];
+        const nowISO = new Date().toISOString();
+
+        return items
+          .map((item): SOPSummary | null => {
+            if (!isRecord(item)) return null;
+            const id = coerceId(item.id ?? item._id);
+            if (!id) return null;
+
+            const updatedAt = item.updatedAt ?? item.updated_at ?? item.createdAt ?? item.created_at;
+            const createdAt = item.createdAt ?? item.created_at ?? updatedAt;
+
+            return {
+              id,
+              title: typeof item.title === 'string' ? item.title : 'Untitled Resume',
+              created_at: coerceISODate(createdAt, nowISO),
+              updated_at: coerceISODate(updatedAt, nowISO),
+            } as SOPSummary;
+          })
+          .filter((x): x is SOPSummary => Boolean(x));
+      };
+
+      const fetchCvSummaries = async (): Promise<SOPSummary[]> => {
+        const res = await fetch('/api/cv?limit=10&sort=-updatedAt', { method: 'GET' });
+        const data: unknown = await res.json().catch(() => null);
+        const items: unknown[] =
+          (isRecord(data) && isRecord(data.data) && Array.isArray(data.data.cvs)
+            ? (data.data.cvs as unknown[])
+            : isRecord(data) && Array.isArray(data.cvs)
+              ? (data.cvs as unknown[])
+              : isRecord(data) && Array.isArray(data.data)
+                ? (data.data as unknown[])
+                : Array.isArray(data)
+                  ? data
+                  : []) ?? [];
+
+        if (!Array.isArray(items)) return [];
+        const nowISO = new Date().toISOString();
+
+        return items
+          .map((item): SOPSummary | null => {
+            if (!isRecord(item)) return null;
+            const id = coerceId(item.id ?? item._id);
+            if (!id) return null;
+
+            const updatedAt = item.updatedAt ?? item.updated_at ?? item.createdAt ?? item.created_at;
+            const createdAt = item.createdAt ?? item.created_at ?? updatedAt;
+
+            return {
+              id,
+              title: typeof item.title === 'string' ? item.title : 'Untitled CV',
+              created_at: coerceISODate(createdAt, nowISO),
+              updated_at: coerceISODate(updatedAt, nowISO),
+            } as SOPSummary;
+          })
+          .filter((x): x is SOPSummary => Boolean(x));
+      };
+
+      const [sops, lors, resumes, cvs] = await Promise.all([
         listSOPs(10),
         listLORs(10),
+        fetchResumeSummaries(),
+        fetchCvSummaries(),
       ]);
-      setDocuments({ sops, lors });
+      setDocuments({ sops, lors, resumes, cvs });
     } catch (error) {
       console.error('Failed to load documents:', error);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, []);
 
-  const handleDelete = async (id: string, type: 'sop' | 'lor') => {
+  useEffect(() => {
+    void loadDocuments();
+  }, [loadDocuments]);
+
+  const handleDelete = async (id: string, type: 'sop' | 'lor' | 'resume' | 'cv') => {
     if (!confirm('Are you sure you want to delete this document?')) return;
     try {
-      await deleteSOP(id);
+      if (type === 'sop' || type === 'lor') {
+        await deleteSOP(id);
+      } else if (type === 'resume') {
+        await fetch(`/api/resume/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      } else if (type === 'cv') {
+        await fetch(`/api/cv/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      }
       await loadDocuments();
     } catch (error) {
       console.error('Failed to delete document:', error);
@@ -96,6 +203,8 @@ export default function DocumentBuilderPage() {
   const allDocuments = [
     ...documents.sops.map((doc) => ({ ...doc, type: 'sop' as const })),
     ...documents.lors.map((doc) => ({ ...doc, type: 'lor' as const })),
+    ...documents.resumes.map((doc) => ({ ...doc, type: 'resume' as const })),
+    ...documents.cvs.map((doc) => ({ ...doc, type: 'cv' as const })),
   ]
     // De-duplicate by id + type in case the API returns overlaps
     .filter((doc, index, self) =>
@@ -178,7 +287,11 @@ export default function DocumentBuilderPage() {
                     <Link 
                       href={doc.type === 'sop' 
                         ? `/dashboard/document-builder/sop-generator?id=${doc.id}` 
-                        : `/dashboard/document-builder/lor-generator?id=${doc.id}`}
+                        : doc.type === 'lor'
+                          ? `/dashboard/document-builder/lor-generator?id=${doc.id}`
+                          : doc.type === 'resume'
+                            ? `/dashboard/document-builder/resume/editor-v2?id=${doc.id}`
+                            : `/dashboard/document-builder/cv/editor-v2?id=${doc.id}`}
                       className="block"
                     >
                       <CardContent className="p-4">
@@ -188,9 +301,17 @@ export default function DocumentBuilderPage() {
                               <div className="p-2 rounded-lg bg-green-100">
                                 <Scroll className="h-4 w-4 text-green-600" />
                               </div>
-                            ) : (
+                            ) : doc.type === 'lor' ? (
                               <div className="p-2 rounded-lg bg-indigo-100">
                                 <Mail className="h-4 w-4 text-indigo-600" />
+                              </div>
+                            ) : doc.type === 'resume' ? (
+                              <div className="p-2 rounded-lg bg-blue-100">
+                                <Briefcase className="h-4 w-4 text-blue-600" />
+                              </div>
+                            ) : (
+                              <div className="p-2 rounded-lg bg-purple-100">
+                                <GraduationCap className="h-4 w-4 text-purple-600" />
                               </div>
                             )}
                             <Badge variant="outline" className="text-xs">
@@ -208,7 +329,11 @@ export default function DocumentBuilderPage() {
                                 <Link 
                                   href={doc.type === 'sop' 
                                     ? `/dashboard/document-builder/sop-generator?id=${doc.id}` 
-                                    : `/dashboard/document-builder/lor-generator?id=${doc.id}`}
+                                    : doc.type === 'lor'
+                                      ? `/dashboard/document-builder/lor-generator?id=${doc.id}`
+                                      : doc.type === 'resume'
+                                        ? `/dashboard/document-builder/resume/editor-v2?id=${doc.id}`
+                                        : `/dashboard/document-builder/cv/editor-v2?id=${doc.id}`}
                                   className="flex items-center cursor-pointer"
                                 >
                                   <Pencil className="h-4 w-4 mr-2" />

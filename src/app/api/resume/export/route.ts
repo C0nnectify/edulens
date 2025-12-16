@@ -7,20 +7,25 @@ import { exportSchema } from '@/lib/validations/resume';
 import {
   authenticateRequest,
   errorResponse,
-  successResponse,
   handleApiError,
   handleValidationError,
   checkRateLimit,
 } from '@/lib/api-utils';
 import { Resume } from '@/types/resume';
+import { resumeApiToUi } from '@/lib/resume/mappers';
 
 // Format resume as plain text
 function formatAsText(resume: Resume): string {
   const lines: string[] = [];
 
+  const name =
+    resume.personalInfo.fullName ||
+    `${resume.personalInfo.firstName || ''} ${resume.personalInfo.lastName || ''}`.trim() ||
+    'RESUME';
+
   // Header
   lines.push('='.repeat(80));
-  lines.push(`${resume.personalInfo.firstName} ${resume.personalInfo.lastName}`.toUpperCase());
+  lines.push(name.toUpperCase());
   lines.push('='.repeat(80));
   lines.push('');
 
@@ -145,46 +150,24 @@ function formatAsText(resume: Resume): string {
 }
 
 // Simulate PDF generation (in production, use a library like puppeteer or pdfkit)
-async function generatePDF(resume: Resume, template: string, options: any): Promise<Buffer> {
-  // Simulate PDF generation delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
-  // In production, you would:
-  // 1. Use a template engine (e.g., Handlebars, EJS) to render HTML
-  // 2. Use Puppeteer or similar to convert HTML to PDF
-  // 3. Apply styling based on template
-  // 4. Handle page breaks, margins, etc.
-
-  /*
-  Example with Puppeteer:
-
-  const puppeteer = require('puppeteer');
-  const browser = await puppeteer.launch();
-  const page = await browser.newPage();
-
-  // Render resume with template
-  const html = renderResumeTemplate(resume, template);
-  await page.setContent(html);
-
-  const pdf = await page.pdf({
-    format: options.pageSize || 'A4',
-    margin: options.margins,
-    printBackground: options.color
-  });
-
-  await browser.close();
-  return pdf;
-  */
-
-  // For demonstration, return text as buffer
+async function generatePDF(
+  resume: Resume,
+  _template: string,
+  _options: Record<string, unknown> | undefined
+): Promise<Buffer> {
+  await new Promise((resolve) => setTimeout(resolve, 2000));
   const textContent = formatAsText(resume);
   return Buffer.from(textContent, 'utf-8');
 }
 
 // Simulate DOCX generation (in production, use docx library)
-async function generateDOCX(resume: Resume, template: string, options: any): Promise<Buffer> {
+async function generateDOCX(
+  resume: Resume,
+  _template: string,
+  _options: Record<string, unknown> | undefined
+): Promise<Buffer> {
   // Simulate DOCX generation delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 
   // In production, you would:
   // 1. Use the 'docx' library to create structured document
@@ -224,12 +207,14 @@ export async function POST(req: NextRequest) {
   try {
     // Authenticate user
     const authResult = await authenticateRequest(req);
-    if (!authResult.authenticated) {
+    if (!authResult.authenticated || !authResult.user) {
       return errorResponse(authResult.error || 'Unauthorized', 401);
     }
 
+    const user = authResult.user;
+
     // Rate limiting (stricter for export operations)
-    if (!checkRateLimit(`export_${authResult.user.id}`, 10, 60000)) {
+    if (!checkRateLimit(`export_${user.id}`, 10, 60000)) {
       return errorResponse('Rate limit exceeded for exports', 429);
     }
 
@@ -246,14 +231,16 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     // Fetch resume
-    const resume = await ResumeModel.findOne({
+    const resumeDoc = await ResumeModel.findOne({
       _id: resumeId,
-      userId: authResult.user.id,
-    }).lean() as Resume;
+      userId: user.id,
+    }).lean();
 
-    if (!resume) {
+    if (!resumeDoc) {
       return errorResponse('Resume not found', 404);
     }
+
+    const resume = resumeApiToUi(resumeDoc);
 
     // Prepare export options
     const exportOptions = {
@@ -301,12 +288,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate filename
-    const fileName = `${resume.personalInfo.firstName}_${resume.personalInfo.lastName}_Resume.${extension}`
+    const baseName =
+      resume.personalInfo.fullName ||
+      `${resume.personalInfo.firstName || ''} ${resume.personalInfo.lastName || ''}`.trim() ||
+      'resume';
+
+    const fileName = `${baseName}_Resume.${extension}`
       .replace(/\s+/g, '_')
       .replace(/[^a-zA-Z0-9._-]/g, '');
 
     // Log export
-    console.log(`User ${authResult.user.id} exported resume ${resumeId} as ${format}`);
+    console.log(`User ${user.id} exported resume ${resumeId} as ${format}`);
 
     // In production, you might:
     // 1. Upload to S3/Cloud Storage and return URL
@@ -314,7 +306,7 @@ export async function POST(req: NextRequest) {
     // For now, we'll return the file as base64 or stream it
 
     // Option 1: Return as downloadable file
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         'Content-Type': mimeType,
@@ -343,7 +335,7 @@ export async function POST(req: NextRequest) {
 }
 
 // OPTIONS: Handle CORS preflight
-export async function OPTIONS(req: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {

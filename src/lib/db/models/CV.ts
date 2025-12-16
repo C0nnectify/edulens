@@ -1,7 +1,7 @@
-// MongoDB Resume Model
+// MongoDB CV Model (separate collection from Resume)
 
 import mongoose from 'mongoose';
-import { Resume } from '@/types/resume';
+import type { CV } from '@/types/cv';
 
 const personalInfoSchema = new mongoose.Schema({
   firstName: { type: String, required: true },
@@ -115,7 +115,7 @@ const aiScoreSchema = new mongoose.Schema({
   suggestions: [String],
 });
 
-const resumeSchema = new mongoose.Schema<Resume>({
+const cvSchema = new mongoose.Schema<CV>({
   userId: { type: String, required: true, index: true },
   title: { type: String, required: true },
   personalInfo: { type: personalInfoSchema, required: true },
@@ -128,26 +128,13 @@ const resumeSchema = new mongoose.Schema<Resume>({
   languages: [languageSchema],
   customSections: [customSectionSchema],
   template: String,
-  design: {
-    colors: {
-      primary: String,
-      secondary: String,
-    },
-    font: String,
-    layout: {
-      columns: Number,
-      spacing: String,
-    },
-  },
   aiScore: aiScoreSchema,
   lastAnalyzedAt: Date,
 }, {
   timestamps: true,
 });
 
-// Indexes for better query performance
-resumeSchema.index({ userId: 1, createdAt: -1 });
-resumeSchema.index({ userId: 1, title: 'text' });
+cvSchema.index({ userId: 1, createdAt: -1 });
+cvSchema.index({ userId: 1, title: 'text' });
 
-// Prevent model recompilation in development
-export const ResumeModel = mongoose.models.Resume || mongoose.model<Resume>('Resume', resumeSchema);
+export const CVModel = mongoose.models.CV || mongoose.model<CV>('CV', cvSchema);

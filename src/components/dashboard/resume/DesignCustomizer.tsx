@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Palette,
@@ -22,233 +22,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Resume, ResumeTemplate, TemplateConfig } from '@/types/resume';
+import { Resume, TemplateConfig } from '@/types/resume';
 import { cn } from '@/lib/utils';
-
-const TEMPLATE_PRESETS: TemplateConfig[] = [
-  {
-    id: 'modern',
-    name: 'Modern',
-    category: ResumeTemplate.MODERN,
-    description: 'Clean and contemporary design with subtle accents',
-    colors: {
-      primary: '#3b82f6',
-      secondary: '#8b5cf6',
-      text: '#1f2937',
-      heading: '#111827',
-      background: '#ffffff',
-      border: '#e5e7eb',
-    },
-    fonts: {
-      heading: 'Inter',
-      body: 'Inter',
-      size: {
-        heading: 24,
-        subheading: 18,
-        body: 11,
-        small: 9,
-      },
-    },
-    layout: {
-      columns: 1,
-      spacing: 'normal',
-      sectionOrder: [],
-      showIcons: false,
-      showDividers: true,
-      headerStyle: 'centered',
-    },
-    atsScore: 95,
-  },
-  {
-    id: 'classic',
-    name: 'Classic',
-    category: ResumeTemplate.CLASSIC,
-    description: 'Traditional format with timeless elegance',
-    colors: {
-      primary: '#1f2937',
-      secondary: '#4b5563',
-      text: '#374151',
-      heading: '#111827',
-      background: '#ffffff',
-      border: '#d1d5db',
-    },
-    fonts: {
-      heading: 'Georgia',
-      body: 'Georgia',
-      size: {
-        heading: 22,
-        subheading: 16,
-        body: 11,
-        small: 9,
-      },
-    },
-    layout: {
-      columns: 1,
-      spacing: 'normal',
-      sectionOrder: [],
-      showIcons: false,
-      showDividers: false,
-      headerStyle: 'left',
-    },
-    atsScore: 100,
-  },
-  {
-    id: 'creative',
-    name: 'Creative',
-    category: ResumeTemplate.CREATIVE,
-    description: 'Bold and expressive for creative professionals',
-    colors: {
-      primary: '#ec4899',
-      secondary: '#8b5cf6',
-      text: '#1f2937',
-      heading: '#111827',
-      background: '#ffffff',
-      border: '#e5e7eb',
-    },
-    fonts: {
-      heading: 'Poppins',
-      body: 'Poppins',
-      size: {
-        heading: 26,
-        subheading: 18,
-        body: 11,
-        small: 9,
-      },
-    },
-    layout: {
-      columns: 2,
-      spacing: 'spacious',
-      sectionOrder: [],
-      showIcons: true,
-      showDividers: true,
-      headerStyle: 'split',
-    },
-    atsScore: 75,
-  },
-  {
-    id: 'minimalist',
-    name: 'Minimalist',
-    category: ResumeTemplate.MINIMALIST,
-    description: 'Simple and refined with maximum whitespace',
-    colors: {
-      primary: '#000000',
-      secondary: '#6b7280',
-      text: '#374151',
-      heading: '#000000',
-      background: '#ffffff',
-      border: '#e5e7eb',
-    },
-    fonts: {
-      heading: 'Helvetica',
-      body: 'Helvetica',
-      size: {
-        heading: 24,
-        subheading: 16,
-        body: 10,
-        small: 8,
-      },
-    },
-    layout: {
-      columns: 1,
-      spacing: 'spacious',
-      sectionOrder: [],
-      showIcons: false,
-      showDividers: false,
-      headerStyle: 'left',
-    },
-    atsScore: 90,
-  },
-  {
-    id: 'professional',
-    name: 'Professional',
-    category: ResumeTemplate.PROFESSIONAL,
-    description: 'Corporate-friendly and highly readable',
-    colors: {
-      primary: '#0f172a',
-      secondary: '#334155',
-      text: '#475569',
-      heading: '#0f172a',
-      background: '#ffffff',
-      border: '#cbd5e1',
-    },
-    fonts: {
-      heading: 'Arial',
-      body: 'Arial',
-      size: {
-        heading: 22,
-        subheading: 16,
-        body: 11,
-        small: 9,
-      },
-    },
-    layout: {
-      columns: 1,
-      spacing: 'compact',
-      sectionOrder: [],
-      showIcons: false,
-      showDividers: true,
-      headerStyle: 'left',
-    },
-    atsScore: 98,
-  },
-  {
-    id: 'ats-friendly',
-    name: 'ATS-Friendly',
-    category: ResumeTemplate.ATS_FRIENDLY,
-    description: 'Optimized for Applicant Tracking Systems',
-    colors: {
-      primary: '#000000',
-      secondary: '#374151',
-      text: '#1f2937',
-      heading: '#000000',
-      background: '#ffffff',
-      border: '#e5e7eb',
-    },
-    fonts: {
-      heading: 'Arial',
-      body: 'Arial',
-      size: {
-        heading: 20,
-        subheading: 14,
-        body: 11,
-        small: 9,
-      },
-    },
-    layout: {
-      columns: 1,
-      spacing: 'normal',
-      sectionOrder: [],
-      showIcons: false,
-      showDividers: false,
-      headerStyle: 'left',
-    },
-    atsScore: 100,
-  },
-];
-
-const COLOR_PRESETS = [
-  { name: 'Blue', primary: '#3b82f6', secondary: '#8b5cf6' },
-  { name: 'Green', primary: '#10b981', secondary: '#06b6d4' },
-  { name: 'Purple', primary: '#8b5cf6', secondary: '#ec4899' },
-  { name: 'Red', primary: '#ef4444', secondary: '#f97316' },
-  { name: 'Slate', primary: '#475569', secondary: '#64748b' },
-  { name: 'Teal', primary: '#14b8a6', secondary: '#06b6d4' },
-  { name: 'Indigo', primary: '#6366f1', secondary: '#8b5cf6' },
-  { name: 'Black', primary: '#000000', secondary: '#374151' },
-];
-
-const FONT_OPTIONS = [
-  'Inter',
-  'Poppins',
-  'Roboto',
-  'Arial',
-  'Helvetica',
-  'Georgia',
-  'Times New Roman',
-  'Playfair Display',
-  'Montserrat',
-  'Open Sans',
-];
+import {
+  COLOR_PRESETS,
+  FONT_OPTIONS,
+  TEMPLATE_PRESETS,
+  getTemplatePresetById,
+} from '@/lib/resume/designPresets';
 
 interface DesignCustomizerProps {
   resume: Resume;
@@ -256,18 +37,44 @@ interface DesignCustomizerProps {
 }
 
 export default function DesignCustomizer({ resume, onUpdate }: DesignCustomizerProps) {
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateConfig>(
-    TEMPLATE_PRESETS.find((t) => t.id === resume.template) || TEMPLATE_PRESETS[0]
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateConfig>(() =>
+    getTemplatePresetById(String(resume.template || ''))
   );
 
-  const [customColors, setCustomColors] = useState({
-    primary: selectedTemplate.colors.primary,
-    secondary: selectedTemplate.colors.secondary,
-  });
+  useEffect(() => {
+    setSelectedTemplate(getTemplatePresetById(String(resume.template || '')));
+  }, [resume.template]);
 
-  const [selectedFont, setSelectedFont] = useState(selectedTemplate.fonts.heading);
-  const [layoutColumns, setLayoutColumns] = useState<1 | 2>(selectedTemplate.layout.columns);
-  const [spacing, setSpacing] = useState(selectedTemplate.layout.spacing);
+  const [customColors, setCustomColors] = useState(() => ({
+    primary: resume.design?.colors?.primary || selectedTemplate.colors.primary,
+    secondary: resume.design?.colors?.secondary || selectedTemplate.colors.secondary,
+  }));
+
+  const [selectedFont, setSelectedFont] = useState(
+    resume.design?.font || selectedTemplate.fonts.heading
+  );
+  const [layoutColumns, setLayoutColumns] = useState<1 | 2>(
+    resume.design?.layout?.columns || selectedTemplate.layout.columns
+  );
+  const [spacing, setSpacing] = useState(
+    resume.design?.layout?.spacing || selectedTemplate.layout.spacing
+  );
+
+  useEffect(() => {
+    const preset = getTemplatePresetById(String(resume.template || ''));
+    const nextColors = {
+      primary: resume.design?.colors?.primary || preset.colors.primary,
+      secondary: resume.design?.colors?.secondary || preset.colors.secondary,
+    };
+    const nextFont = resume.design?.font || preset.fonts.heading;
+    const nextColumns = resume.design?.layout?.columns || preset.layout.columns;
+    const nextSpacing = resume.design?.layout?.spacing || preset.layout.spacing;
+
+    setCustomColors(nextColors);
+    setSelectedFont(nextFont);
+    setLayoutColumns(nextColumns);
+    setSpacing(nextSpacing);
+  }, [resume.template, resume.design]);
 
   const handleTemplateChange = (template: TemplateConfig) => {
     setSelectedTemplate(template);
@@ -280,19 +87,43 @@ export default function DesignCustomizer({ resume, onUpdate }: DesignCustomizerP
     setSpacing(template.layout.spacing);
 
     onUpdate({
-      template: template.category,
+      template: template.id,
+      design: {
+        colors: {
+          primary: template.colors.primary,
+          secondary: template.colors.secondary,
+        },
+        font: template.fonts.heading,
+        layout: {
+          columns: template.layout.columns,
+          spacing: template.layout.spacing,
+        },
+      },
     });
   };
 
   const handleColorChange = (colorPreset: typeof COLOR_PRESETS[0]) => {
-    setCustomColors({
+    const next = {
       primary: colorPreset.primary,
       secondary: colorPreset.secondary,
+    };
+    setCustomColors(next);
+    onUpdate({
+      design: {
+        ...resume.design,
+        colors: next,
+      },
     });
   };
 
   const handleFontChange = (font: string) => {
     setSelectedFont(font);
+    onUpdate({
+      design: {
+        ...resume.design,
+        font,
+      },
+    });
   };
 
   return (
@@ -422,9 +253,16 @@ export default function DesignCustomizer({ resume, onUpdate }: DesignCustomizerP
                     id="primary-color"
                     type="color"
                     value={customColors.primary}
-                    onChange={(e) =>
-                      setCustomColors({ ...customColors, primary: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const next = { ...customColors, primary: e.target.value };
+                      setCustomColors(next);
+                      onUpdate({
+                        design: {
+                          ...resume.design,
+                          colors: next,
+                        },
+                      });
+                    }}
                     className="w-12 h-10 rounded border cursor-pointer"
                   />
                   <div className="flex-1 px-3 py-2 border rounded bg-muted font-mono text-sm">
@@ -440,9 +278,16 @@ export default function DesignCustomizer({ resume, onUpdate }: DesignCustomizerP
                     id="secondary-color"
                     type="color"
                     value={customColors.secondary}
-                    onChange={(e) =>
-                      setCustomColors({ ...customColors, secondary: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const next = { ...customColors, secondary: e.target.value };
+                      setCustomColors(next);
+                      onUpdate({
+                        design: {
+                          ...resume.design,
+                          colors: next,
+                        },
+                      });
+                    }}
                     className="w-12 h-10 rounded border cursor-pointer"
                   />
                   <div className="flex-1 px-3 py-2 border rounded bg-muted font-mono text-sm">
@@ -479,7 +324,19 @@ export default function DesignCustomizer({ resume, onUpdate }: DesignCustomizerP
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant={layoutColumns === 1 ? 'default' : 'outline'}
-                  onClick={() => setLayoutColumns(1)}
+                  onClick={() => {
+                    setLayoutColumns(1);
+                    onUpdate({
+                      design: {
+                        ...resume.design,
+                        layout: {
+                          ...resume.design?.layout,
+                          columns: 1,
+                          spacing,
+                        },
+                      },
+                    });
+                  }}
                   className="h-auto p-4"
                 >
                   <div className="text-center">
@@ -492,7 +349,19 @@ export default function DesignCustomizer({ resume, onUpdate }: DesignCustomizerP
                 </Button>
                 <Button
                   variant={layoutColumns === 2 ? 'default' : 'outline'}
-                  onClick={() => setLayoutColumns(2)}
+                  onClick={() => {
+                    setLayoutColumns(2);
+                    onUpdate({
+                      design: {
+                        ...resume.design,
+                        layout: {
+                          ...resume.design?.layout,
+                          columns: 2,
+                          spacing,
+                        },
+                      },
+                    });
+                  }}
                   className="h-auto p-4"
                 >
                   <div className="text-center">
@@ -510,7 +379,23 @@ export default function DesignCustomizer({ resume, onUpdate }: DesignCustomizerP
 
             <div>
               <Label htmlFor="spacing-select">Spacing</Label>
-              <Select value={spacing} onValueChange={(val) => setSpacing(val as any)}>
+              <Select
+                value={spacing}
+                onValueChange={(val) => {
+                  const nextSpacing = val as any;
+                  setSpacing(nextSpacing);
+                  onUpdate({
+                    design: {
+                      ...resume.design,
+                      layout: {
+                        ...resume.design?.layout,
+                        columns: layoutColumns,
+                        spacing: nextSpacing,
+                      },
+                    },
+                  });
+                }}
+              >
                 <SelectTrigger id="spacing-select" className="mt-2">
                   <SelectValue />
                 </SelectTrigger>

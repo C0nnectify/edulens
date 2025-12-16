@@ -115,6 +115,23 @@ export const resumeSchema = z.object({
   languages: z.array(languageSchema).optional(),
   customSections: z.array(customSectionSchema).optional(),
   template: z.string().optional(),
+  design: z
+    .object({
+      colors: z
+        .object({
+          primary: z.string().optional(),
+          secondary: z.string().optional(),
+        })
+        .optional(),
+      font: z.string().optional(),
+      layout: z
+        .object({
+          columns: z.union([z.literal(1), z.literal(2)]).optional(),
+          spacing: z.enum(['compact', 'normal', 'spacious']).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 // Update Resume Schema (all fields optional)

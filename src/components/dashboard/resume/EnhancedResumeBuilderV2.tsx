@@ -19,11 +19,13 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Resume, ResumeTemplate } from '@/types/resume';
+import { ResumePatchOpsSchema, applyResumePatchOps, generateResumePatchOpsFromInstruction } from '@/lib/resume/instructionPatch';
 import PersonalInfoForm from './forms/PersonalInfoForm';
 import ExperienceForm from './forms/ExperienceForm';
 import EducationForm from './forms/EducationForm';
@@ -124,12 +126,16 @@ const RESUME_STEPS: ResumeStep[] = [
 
 interface EnhancedResumeBuilderV2Props {
   initialResume?: Resume;
+  initialTemplate?: string;
+  documentLabel?: string;
   onSave?: (resume: Resume) => void;
   onExport?: () => void;
 }
 
 export default function EnhancedResumeBuilderV2({
   initialResume,
+  initialTemplate,
+  documentLabel = 'Resume',
   onSave,
   onExport,
 }: EnhancedResumeBuilderV2Props) {
@@ -141,7 +147,7 @@ export default function EnhancedResumeBuilderV2({
       title: 'Untitled Resume',
       createdAt: new Date(),
       updatedAt: new Date(),
-      template: ResumeTemplate.MODERN,
+      template: (initialTemplate as ResumeTemplate) || ResumeTemplate.MODERN,
       personalInfo: {
         fullName: '',
         email: '',
@@ -153,20 +159,54 @@ export default function EnhancedResumeBuilderV2({
       skills: [],
     }
   );
+  const hasAppliedInitialResumeRef = React.useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
 
+  const [instruction, setInstruction] = useState('');
+  const [lastInstructionError, setLastInstructionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Apply initialResume when it arrives (async load from id/draftKey).
+    if (initialResume && !hasAppliedInitialResumeRef.current) {
+      setResume(initialResume);
+      hasAppliedInitialResumeRef.current = true;
+      return;
+    }
+
+    // If the page provides only an initial template, ensure it's applied.
+    if (!hasAppliedInitialResumeRef.current && initialTemplate) {
+      setResume((prev) => ({
+        ...prev,
+        template: (initialTemplate as ResumeTemplate) || prev.template,
+      }));
+    }
+  }, [initialResume, initialTemplate]);
+
   // Auto-save functionality
   useEffect(() => {
     if (!autoSaveEnabled) return;
+
+    // Don't auto-save until we have applied initial data (prevents saving an empty default while draft/id loads).
+    if (!hasAppliedInitialResumeRef.current && initialResume) return;
+
+    // Avoid creating empty resumes.
+    const isTrulyEmpty =
+      !(resume.personalInfo?.fullName || '').trim() &&
+      !(resume.personalInfo?.email || '').trim() &&
+      !(resume.summary || '').trim() &&
+      (resume.experience?.length ?? 0) === 0 &&
+      (resume.education?.length ?? 0) === 0 &&
+      (resume.skills?.length ?? 0) === 0;
+    if (isTrulyEmpty) return;
 
     const timer = setTimeout(() => {
       handleSave(true);
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, [resume, autoSaveEnabled]);
+  }, [resume, autoSaveEnabled, initialResume]);
 
   const handleSave = async (isAutoSave = false) => {
     setIsSaving(true);
@@ -174,7 +214,7 @@ export default function EnhancedResumeBuilderV2({
       // Simulate save
       await new Promise(resolve => setTimeout(resolve, 500));
       if (onSave) {
-        onSave(resume);
+        await onSave(resume);
       }
       setLastSaved(new Date());
     } catch (error) {
@@ -182,6 +222,24 @@ export default function EnhancedResumeBuilderV2({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleApplyInstruction = () => {
+    const ops = generateResumePatchOpsFromInstruction(instruction);
+    if (ops.length === 0) {
+      setLastInstructionError('Could not understand that instruction. Try: "add skill Python" or "set summary to ..."');
+      return;
+    }
+
+    const validation = ResumePatchOpsSchema.safeParse(ops);
+    if (!validation.success) {
+      setLastInstructionError('Invalid edit operations generated.');
+      return;
+    }
+
+    setResume((prev) => applyResumePatchOps(prev, validation.data));
+    setInstruction('');
+    setLastInstructionError(null);
   };
 
   const updateResume = useCallback((updates: Partial<Resume>) => {
@@ -217,10 +275,17 @@ export default function EnhancedResumeBuilderV2({
       {/* Dark Sidebar - Step Navigation */}
       <div className="w-72 bg-slate-900 text-white flex flex-col">
         <div className="p-6 border-b border-slate-800">
-          <h2 className="text-xl font-bold mb-1">Resume Builder</h2>
-          <p className="text-sm text-slate-400">
-            {resume.title || 'Untitled Resume'}
-          </p>
+          <h2 className="text-xl font-bold mb-1">{documentLabel} Builder</h2>
+          <Input
+            value={resume.title || ''}
+            onChange={(e) => updateResume({ title: e.target.value })}
+            onBlur={() => {
+              const nextTitle = (resume.title || '').trim();
+              if (!nextTitle) updateResume({ title: 'Untitled Resume' });
+            }}
+            placeholder="Untitled Resume"
+            className="mt-1 h-9 bg-slate-900 text-slate-200 placeholder:text-slate-500 border-slate-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
           <div className="mt-4">
             <div className="flex justify-between text-xs text-slate-400 mb-2">
               <span>Progress</span>
@@ -285,11 +350,12 @@ export default function EnhancedResumeBuilderV2({
             className="w-full bg-blue-600 hover:bg-blue-700"
           >
             <Save className="w-4 h-4 mr-2" />
-            {isSaving ? 'Saving...' : 'Save Resume'}
+            {isSaving ? 'Saving...' : `Save ${documentLabel}`}
           </Button>
           <Button
             onClick={onExport}
             variant="outline"
+            disabled={!onExport}
             className="w-full border-slate-700 hover:bg-slate-800"
           >
             <Download className="w-4 h-4 mr-2" />
@@ -367,6 +433,24 @@ export default function EnhancedResumeBuilderV2({
           <p className="text-xs text-muted-foreground mt-1">
             Changes appear instantly
           </p>
+        </div>
+
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+          <div className="text-sm font-semibold mb-2">Edit by message</div>
+          <div className="flex gap-2">
+            <input
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              placeholder='e.g. "add skill Python"'
+              className="flex-1 h-9 px-3 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            />
+            <Button size="sm" onClick={handleApplyInstruction}>
+              Apply
+            </Button>
+          </div>
+          {lastInstructionError && (
+            <div className="text-xs text-red-600 mt-2">{lastInstructionError}</div>
+          )}
         </div>
         <ImprovedResumePreview resume={resume} />
       </div>

@@ -283,6 +283,22 @@ export interface SectionConfig {
 }
 
 /**
+ * Resume design overrides selected in the builder UI.
+ * These are optional and can layer on top of the base template.
+ */
+export interface ResumeDesign {
+  colors?: {
+    primary?: string;
+    secondary?: string;
+  };
+  font?: string;
+  layout?: {
+    columns?: 1 | 2;
+    spacing?: 'compact' | 'normal' | 'spacious';
+  };
+}
+
+/**
  * Resume metadata for versioning and tracking
  */
 export interface ResumeMetadata {
@@ -319,6 +335,7 @@ export interface Resume {
   languages?: Language[];
   customSections?: CustomSection[];
   template: ResumeTemplate | string;
+  design?: ResumeDesign;
   metadata?: ResumeMetadata;
   aiScore?: AIScore;
   lastAnalyzedAt?: Date;

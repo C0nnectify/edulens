@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Lightbulb, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,11 @@ export default function SkillsForm({ resume, onUpdate, onComplete }: SkillsFormP
   const [newSkillCategory, setNewSkillCategory] = useState<SkillCategory>(SkillCategory.TECHNICAL);
   const [newSkillProficiency, setNewSkillProficiency] = useState<ProficiencyLevel>(ProficiencyLevel.INTERMEDIATE);
   const [showSuggestions, setShowSuggestions] = useState(true);
+
+  // Keep local list in sync when resume loads/changes.
+  useEffect(() => {
+    setSkills(resume.skills || []);
+  }, [resume.skills]);
 
   const handleAddSkill = () => {
     if (!newSkillName.trim()) return;

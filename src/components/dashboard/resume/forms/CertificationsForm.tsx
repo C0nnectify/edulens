@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -33,7 +33,8 @@ const certificationSchema = z.object({
   date: z.string().min(1, 'Issue date is required'),
   expiryDate: z.string().optional(),
   credentialId: z.string().optional(),
-  url: z.string().url().optional().or(z.literal('')),
+  // Accept free-form; normalize to https://... on submit.
+  url: z.string().optional().or(z.literal('')),
 });
 
 type CertificationFormData = z.infer<typeof certificationSchema>;
@@ -49,6 +50,24 @@ export default function CertificationsForm({ resume, onUpdate }: CertificationsF
   );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  // Keep local list in sync when resume loads/changes.
+  useEffect(() => {
+    setCertifications(resume.certifications || []);
+  }, [resume.certifications]);
+
+  const normalizeUrl = (value: unknown): string => {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) return '';
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+      const parsed = new URL(withScheme);
+      if (!parsed.hostname || !parsed.hostname.includes('.')) return '';
+      return parsed.toString();
+    } catch {
+      return '';
+    }
+  };
 
   const form = useForm<CertificationFormData>({
     resolver: zodResolver(certificationSchema),
@@ -70,7 +89,7 @@ export default function CertificationsForm({ resume, onUpdate }: CertificationsF
       date: data.date,
       expiryDate: data.expiryDate,
       credentialId: data.credentialId,
-      url: data.url,
+      url: normalizeUrl(data.url),
     };
 
     let newCertifications: Certification[];

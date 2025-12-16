@@ -8,22 +8,26 @@ import mongoose from 'mongoose';
 export interface ApiError {
   error: string;
   message: string;
-  details?: any;
+  details?: unknown;
   statusCode: number;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
   message?: string;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
 // Error response helper
 export function errorResponse(
   message: string,
   statusCode: number = 400,
-  details?: any
+  details?: unknown
 ): NextResponse<ApiError> {
   return NextResponse.json(
     {
@@ -54,21 +58,28 @@ export function successResponse<T>(
 
 // Zod validation error handler
 export function handleValidationError(error: ZodError): NextResponse<ApiError> {
-  const errors = error.errors.map((err) => ({
-    field: err.path.join('.'),
-    message: err.message,
+  // Zod v3 used `errors`, Zod v4 uses `issues`.
+  const issues: Array<{ path?: Array<string | number>; message?: string }> =
+    ((error as unknown as { issues?: unknown }).issues as any) ??
+    ((error as unknown as { errors?: unknown }).errors as any) ??
+    [];
+
+  const errors = (Array.isArray(issues) ? issues : []).map((err) => ({
+    field: Array.isArray(err?.path) ? err.path.join('.') : '',
+    message: typeof err?.message === 'string' ? err.message : 'Invalid value',
   }));
 
   return errorResponse('Validation failed', 400, errors);
 }
 
 // MongoDB error handler
-export function handleMongoError(error: any): NextResponse<ApiError> {
-  if (error.code === 11000) {
-    return errorResponse('Duplicate entry found', 409, error.keyValue);
+export function handleMongoError(error: unknown): NextResponse<ApiError> {
+  const e = asRecord(error);
+  if (e.code === 11000) {
+    return errorResponse('Duplicate entry found', 409, e.keyValue);
   }
 
-  if (error.name === 'CastError') {
+  if (e.name === 'CastError') {
     return errorResponse('Invalid ID format', 400);
   }
 
@@ -76,7 +87,7 @@ export function handleMongoError(error: any): NextResponse<ApiError> {
 }
 
 // Generic error handler
-export function handleApiError(error: any): NextResponse<ApiError> {
+export function handleApiError(error: unknown): NextResponse<ApiError> {
   console.error('API Error:', error);
 
   if (error instanceof ZodError) {

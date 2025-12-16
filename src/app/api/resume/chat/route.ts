@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
 /**
  * AI Resume Chat API
  * Provides context-aware assistance for resume building
  */
 export async function POST(request: NextRequest) {
   try {
-    const { message, context } = await request.json();
+    const body = asRecord(await request.json());
+    const message = typeof body.message === 'string' ? body.message : '';
+    const contextRaw = asRecord(body.context);
+    const context = {
+      section: typeof contextRaw.section === 'string' ? contextRaw.section : '',
+      content: contextRaw.content,
+    };
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
@@ -36,7 +46,7 @@ export async function POST(request: NextRequest) {
  */
 async function generateAIResponse(
   message: string,
-  context: { section: string; content: any }
+  context: { section: string; content: unknown }
 ): Promise<{ text: string; suggestions?: string[] }> {
   const lowerMessage = message.toLowerCase();
   const section = context.section;

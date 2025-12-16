@@ -30,11 +30,15 @@ export default function ProfessionalSummaryForm({ resume, onUpdate }: Profession
   });
 
   useEffect(() => {
+    form.reset({ summary: resume.summary || '' });
+  }, [form, resume.summary]);
+
+  useEffect(() => {
     const subscription = form.watch((value) => {
       onUpdate({ summary: value.summary });
     });
     return () => subscription.unsubscribe();
-  }, [form.watch]);
+  }, [form, onUpdate]);
 
   return (
     <Card className="p-6">

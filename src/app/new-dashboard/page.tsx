@@ -31,58 +31,75 @@ type ChatMessage = {
 };
 
 // Document type options for Document Builder
-const documentTypeOptions: Array<{ key: DocumentType | 'analyze'; label: string; description: string; icon: LucideIcon; color: string }> = [
+const documentTypeOptions: Array<{ key: DocumentType | 'analyze'; label: string; description: string; icon: LucideIcon; color: string; bg: string; border: string; text: string }> = [
   {
     key: "sop",
     label: "SOP",
     description: "Statement of Purpose",
     icon: FileEdit,
-    color: "from-blue-500 to-indigo-600",
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    border: "border-blue-200",
+    text: "text-blue-700",
   },
   {
     key: "lor",
     label: "LOR",
     description: "Letter of Recommendation",
     icon: Mail,
-    color: "from-purple-500 to-pink-600",
+    color: "text-purple-600",
+    bg: "bg-purple-50",
+    border: "border-purple-200",
+    text: "text-purple-700",
   },
   {
     key: "cv",
     label: "CV",
     description: "Curriculum Vitae",
     icon: GraduationCap,
-    color: "from-emerald-500 to-teal-600",
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+    border: "border-emerald-200",
+    text: "text-emerald-700",
   },
   {
     key: "resume",
     label: "Resume",
     description: "Professional Resume",
     icon: Briefcase,
-    color: "from-orange-500 to-red-600",
+    color: "text-orange-600",
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+    text: "text-orange-700",
   },
   {
     key: "analyze",
     label: "Analyze",
     description: "Document Analysis",
     icon: Search,
-    color: "from-pink-500 to-rose-600",
+    color: "text-pink-600",
+    bg: "bg-pink-50",
+    border: "border-pink-200",
+    text: "text-pink-700",
   },
 ];
 
-const agentTools: Array<{ key: Exclude<FeatureKey, null>; label: string; description: string; icon: LucideIcon; color: string }> = [
+const agentTools: Array<{ key: Exclude<FeatureKey, null>; label: string; description: string; icon: LucideIcon; color: string; bg: string }> = [
   {
     key: "document_builder",
     label: "Document Builder",
     description: "Create SOP, LOR, CV, Resume, and analyze documents with AI assistance.",
     icon: FileText,
-    color: "from-cyan-400 to-blue-500",
+    color: "text-blue-600",
+    bg: "bg-blue-50",
   },
   {
     key: "monitoring_agent",
     label: "Application Tracker",
     description: "Track your university applications and monitor their status (Coming soon).",
     icon: ListChecks,
-    color: "from-emerald-400 to-teal-500",
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
   },
 ];
 
@@ -109,6 +126,12 @@ const quickLinks: Array<{ title: string; description: string; href: string; icon
     title: 'Resume Builder',
     description: 'Build professional resume',
     href: '/dashboard/document-builder/resume',
+    icon: FileText,
+  },
+  {
+    title: 'CV Builder',
+    description: 'Build academic CV',
+    href: '/dashboard/document-builder/cv',
     icon: FileText,
   },
   {
@@ -157,6 +180,7 @@ export default function NewDashboardPage() {
   const documentTypeDropdownRef = useRef<HTMLDivElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const filePanelRef = useRef<HTMLDivElement | null>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const loadRecentChats = useCallback(async () => {
     try {
@@ -356,9 +380,38 @@ export default function NewDashboardPage() {
     }
     
     const text = input.trim();
+
+    const normalizeCmd = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .replace(/[.!?]+$/g, "")
+        .trim();
+
+    const lines = text.split(/\r?\n/);
+    const lastLine = (lines[lines.length - 1] ?? "").trim();
+    const normalizedCmd = normalizeCmd(text);
+    const normalizedLastLine = normalizeCmd(lastLine);
+
+    const wantsGenerateDraft =
+      selectedTool === "document_builder" &&
+      (selectedDocumentType === "resume"
+        ? normalizedCmd === "generate resume" || normalizedLastLine === "generate resume"
+        : selectedDocumentType === "cv"
+          ? normalizedCmd === "generate cv" || normalizedLastLine === "generate cv"
+          : false);
+
+    // If user ended their message with the command, strip it from the backend message.
+    const messageForBackend = wantsGenerateDraft && (normalizedLastLine === "generate resume" || normalizedLastLine === "generate cv")
+      ? lines.slice(0, -1).join("\n").trim() || lastLine
+      : text;
     const currentAttachments = uploadedFiles.filter(f => selectedFileIds.includes(f.id));
     
     setInput("");
+    // Collapse the auto-growing textarea after send.
+    if (chatInputRef.current) {
+      chatInputRef.current.style.height = "auto";
+    }
     const localId = `m-${Date.now()}`;
     setMessages((prev) => [...prev, { 
       id: localId, 
@@ -378,11 +431,13 @@ export default function NewDashboardPage() {
 
       const res = await sendMessage({
         sessionId: sessionId || undefined,
-        message: text,
+        message: messageForBackend,
         feature,
         documentType: selectedTool === "document_builder" && selectedDocumentType !== 'analyze' ? selectedDocumentType : undefined,
         // IMPORTANT: these are canonical FastAPI document_ids
-        attachmentIds: selectedFileIds.length > 0 ? selectedFileIds : undefined,
+        // Always send the array so empty selection clears sticky context.
+        attachmentIds: selectedFileIds,
+        generateDraft: wantsGenerateDraft,
       });
       
       if (res.sessionId && res.sessionId !== sessionId) setSessionId(res.sessionId);
@@ -433,20 +488,20 @@ export default function NewDashboardPage() {
   }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles, loadRecentChats]);
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-screen bg-gray-50/50 font-sans text-gray-900 selection:bg-blue-100 selection:text-blue-900">
       {/* Left Sidebar - Chat History (Collapsible) */}
-      <aside className={`${sidebarOpen ? 'w-[280px]' : 'w-0'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300 overflow-hidden`}>
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Sparkles size={18} className="text-white" />
+      <aside className={`${sidebarOpen ? 'w-[280px]' : 'w-0'} bg-white/80 backdrop-blur-xl border-r border-gray-200/60 flex flex-col transition-all duration-300 overflow-hidden shadow-sm z-20`}>
+        <div className="p-5 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Sparkles size={20} className="text-white" />
               </div>
-              <span className="font-semibold text-lg text-gray-900">EduLens</span>
+              <span className="font-bold text-xl text-gray-900 tracking-tight">EduLens</span>
             </div>
             <button 
               onClick={() => setSidebarOpen(false)}
-              className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-100"
+              className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100/80 transition-colors"
             >
               <X size={18} />
             </button>
@@ -458,15 +513,15 @@ export default function NewDashboardPage() {
               setSelectedDocumentType(null);
               setSessionId(null);
             }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all shadow-sm font-medium"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 font-medium text-sm"
           >
             <Plus size={18} />
             <span>New Chat</span>
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3">
-          <div className="px-2 py-2 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+        <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+          <div className="px-3 py-2 mb-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
             <Clock size={12} />
             Recent Chats
           </div>
@@ -549,71 +604,71 @@ export default function NewDashboardPage() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center bg-white overflow-hidden">
+      <main className="flex-1 flex flex-col items-center relative overflow-hidden">
         {/* Top Header */}
-        <div className="w-full border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="w-full border-b border-gray-200/50 bg-white/60 backdrop-blur-md sticky top-0 z-10">
           <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {!sidebarOpen && (
                 <button 
                   onClick={() => setSidebarOpen(true)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100/80 rounded-xl transition-colors text-gray-600"
                 >
-                  <Menu size={20} className="text-gray-600" />
+                  <Menu size={20} />
                 </button>
               )}
-              <button className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors text-gray-700 font-medium flex items-center gap-2">
-                <Search size={16} />
+              <button className="px-3 py-1.5 bg-gray-100/50 hover:bg-gray-100 border border-gray-200/50 rounded-lg text-sm transition-all text-gray-600 font-medium flex items-center gap-2 hover:shadow-sm">
+                <Search size={14} />
                 Focus
               </button>
             </div>
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span>AI Orchestrator</span>
-              <span>•</span>
-              <span>Multi-Agent System</span>
+            <div className="flex items-center gap-2 text-xs font-medium text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+              <span className="text-gray-600">AI Orchestrator</span>
+              <span className="text-gray-300">•</span>
+              <span className="text-gray-600">Multi-Agent System</span>
             </div>
           </div>
         </div>
 
         {/* Chat Messages or Tool Selection */}
-        <div className="flex-1 w-full flex overflow-hidden">
-          <div className="flex-1 max-w-5xl px-6 overflow-y-auto mx-auto">
+        <div className="flex-1 w-full flex overflow-hidden relative">
+          <div className="flex-1 max-w-5xl px-6 overflow-y-auto mx-auto custom-scrollbar">
             {messages.length === 0 ? (
               <div className="flex items-center justify-center h-full py-12">
-                <div className="w-full max-w-3xl space-y-8">
-                  <div className="text-center space-y-3">
-                    <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Sparkles size={32} className="text-white" />
+                <div className="w-full max-w-3xl space-y-10">
+                  <div className="text-center space-y-4">
+                    <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-600 to-violet-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/30 rotate-3 hover:rotate-6 transition-transform duration-500">
+                      <Sparkles size={40} className="text-white" />
                     </div>
-                    <h2 className="text-3xl font-bold text-gray-900">Ask anything</h2>
-                    <p className="text-gray-500">Pick a feature from below or start typing</p>
+                    <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Ask anything</h2>
+                    <p className="text-lg text-gray-500 font-medium">Pick a feature from below or start typing</p>
                   </div>
 
                   {/* Agent Tool Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
                     {agentTools.map((tool) => (
                       <button
                         key={tool.key}
                         onClick={() => handleToolSelect(tool.key)}
-                        className={`group relative overflow-hidden rounded-xl p-4 text-left transition-all duration-300 border-2 ${
+                        className={`group relative overflow-hidden rounded-2xl p-5 text-left transition-all duration-300 border ${
                           selectedTool === tool.key
-                            ? 'border-blue-500 shadow-md scale-[1.02]'
-                            : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                            ? `border-blue-200 ring-4 ring-blue-50 shadow-xl shadow-blue-100 scale-[1.02] bg-white`
+                            : 'border-gray-200/60 bg-white hover:border-blue-200 hover:shadow-lg hover:shadow-gray-100 hover:-translate-y-0.5'
                         }`}
                       >
-                        <div className={`absolute inset-0 bg-gradient-to-br ${tool.color} opacity-0 group-hover:opacity-5 transition-opacity`} />
-                        <div className="relative flex items-start gap-3">
-                          <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${tool.color} flex items-center justify-center text-white shadow-sm flex-shrink-0`}>
-                            <tool.icon size={20} />
+                        <div className={`absolute inset-0 ${tool.bg} opacity-0 group-hover:opacity-50 transition-opacity duration-500`} />
+                        <div className="relative flex items-start gap-4">
+                          <div className={`w-12 h-12 rounded-xl ${tool.bg} flex items-center justify-center ${tool.color} shadow-sm flex-shrink-0 group-hover:scale-110 transition-transform duration-300`}>
+                            <tool.icon size={22} />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-base font-semibold text-gray-900 mb-1">{tool.label}</h3>
-                            <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{tool.description}</p>
+                          <div className="flex-1 min-w-0 pt-0.5">
+                            <h3 className="text-lg font-bold text-gray-900 mb-1.5">{tool.label}</h3>
+                            <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
                           </div>
                           {selectedTool === tool.key && (
                             <div className="flex-shrink-0">
-                              <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                                <Zap size={12} className="text-white" />
+                              <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center shadow-md shadow-blue-200 animate-in zoom-in duration-300">
+                                <Zap size={14} className="text-white" />
                               </div>
                             </div>
                           )}
@@ -624,59 +679,63 @@ export default function NewDashboardPage() {
 
                   {/* Document Type Selection - Shows when Document Builder is selected */}
                   {selectedTool === "document_builder" && (
-                    <div className="mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="flex items-center gap-2 mb-3">
-                        <FileText size={16} className="text-gray-500" />
-                        <span className="text-sm font-medium text-gray-700">Select document type:</span>
+                    <div className="mt-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                      <div className="flex items-center gap-2 mb-4 px-1">
+                        <div className="w-1 h-4 bg-blue-600 rounded-full"></div>
+                        <span className="text-sm font-bold text-gray-800 uppercase tracking-wide">Select document type</span>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         {documentTypeOptions.map((docType) => (
                           <button
                             key={docType.key}
                             onClick={() => setSelectedDocumentType(docType.key)}
-                            className={`group relative overflow-hidden rounded-lg p-3 text-left transition-all duration-200 border ${
+                            className={`group relative overflow-hidden rounded-xl p-3 text-left transition-all duration-200 border ${
                               selectedDocumentType === docType.key
-                                ? `border-2 border-blue-500 bg-gradient-to-br ${docType.color} bg-opacity-5 shadow-sm`
-                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                ? `${docType.border} ${docType.bg} shadow-md ring-1 ring-offset-1 ring-transparent`
+                                : 'border-gray-200/60 bg-white hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm hover:-translate-y-0.5'
                             }`}
                           >
-                            <div className="flex flex-col items-center gap-2">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                            <div className="flex flex-col items-center gap-3 py-1">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 ${
                                 selectedDocumentType === docType.key 
-                                  ? `bg-gradient-to-br ${docType.color} text-white` 
-                                  : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
-                              }`}>
-                                <docType.icon size={16} />
+                                  ? 'bg-white shadow-sm' 
+                                  : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'
+                              } ${selectedDocumentType === docType.key ? docType.color : ''}`}>
+                                <docType.icon size={18} />
                               </div>
                               <div className="text-center">
-                                <h4 className={`text-sm font-semibold ${
-                                  selectedDocumentType === docType.key ? 'text-blue-700' : 'text-gray-900'
+                                <h4 className={`text-sm font-bold ${
+                                  selectedDocumentType === docType.key ? docType.text : 'text-gray-700'
                                 }`}>{docType.label}</h4>
-                                <p className="text-xs text-gray-500 mt-0.5">{docType.description}</p>
+                                <p className={`text-[10px] mt-1 font-medium leading-tight ${
+                                  selectedDocumentType === docType.key ? docType.text : 'text-gray-400'
+                                } opacity-80`}>{docType.description}</p>
                               </div>
                             </div>
                           </button>
                         ))}
                       </div>
+
+
                     </div>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="space-y-6 py-6" ref={chatContainerRef}>
+              <div className="space-y-8 py-8" ref={chatContainerRef}>
                 {messages.map((m) => (
                   <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[85%] ${m.role === "user" ? "order-2" : "order-1"}`}>
                       {/* Message Bubble */}
-                      <div className={`rounded-2xl px-4 py-3 ${
+                      <div className={`rounded-2xl px-5 py-3.5 shadow-sm ${
                         m.role === "user" 
-                          ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white" 
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-gradient-to-br from-blue-600 to-violet-600 text-white rounded-tr-sm" 
+                          : "bg-white border border-gray-100 text-gray-800 rounded-tl-sm"
                       }`}>
                         {m.role === "user" ? (
-                          <div className="whitespace-pre-wrap leading-relaxed text-sm">{m.content}</div>
+                          <div className="whitespace-pre-wrap leading-relaxed text-[15px]">{m.content}</div>
                         ) : (
-                          <MarkdownContent content={m.content} className="text-sm" />
+                          <MarkdownContent content={m.content} className="text-[15px] prose-sm prose-blue" />
                         )}
                       </div>
                       
@@ -728,33 +787,44 @@ export default function NewDashboardPage() {
                       {/* Link to open generated document in the appropriate editor */}
                       {m.role === "ai" &&
                         m.documentDraft &&
-                        m.draftKey &&
-                        selectedTool === "document_builder" && (
+                        m.draftKey && (
                           <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between gap-3">
                             <div className="text-xs text-blue-900">
                               A full draft has been generated. Open it in the dedicated editor to fine-tune formatting, save, and export.
                             </div>
                             {m.documentType === "lor" ? (
                               <Link
-                                href={`/dashboard/document-builder/lor-generator?draftKey=${encodeURIComponent(
-                                  m.draftKey,
-                                )}`}
+                                href={`/dashboard/document-builder/lor-generator?draftKey=${encodeURIComponent(m.draftKey)}`}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full bg-blue-600 text-white hover:bg-blue-700"
                               >
                                 <FileEdit size={12} />
                                 <span>Open in LOR Editor</span>
                               </Link>
-                            ) : (
+                            ) : m.documentType === "sop" ? (
                               <Link
-                                href={`/dashboard/document-builder/sop-generator?draftKey=${encodeURIComponent(
-                                  m.draftKey,
-                                )}`}
+                                href={`/dashboard/document-builder/sop-generator?draftKey=${encodeURIComponent(m.draftKey)}`}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full bg-blue-600 text-white hover:bg-blue-700"
                               >
                                 <FileEdit size={12} />
                                 <span>Open in SOP Editor</span>
                               </Link>
-                            )}
+                            ) : m.documentType === "resume" ? (
+                              <Link
+                                href={`/dashboard/document-builder/resume/editor-v2?draftKey=${encodeURIComponent(m.draftKey)}`}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                              >
+                                <FileEdit size={12} />
+                                <span>Open in Resume Builder</span>
+                              </Link>
+                            ) : m.documentType === "cv" ? (
+                              <Link
+                                href={`/dashboard/document-builder/cv/editor-v2?draftKey=${encodeURIComponent(m.draftKey)}`}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                              >
+                                <FileEdit size={12} />
+                                <span>Open in CV Builder</span>
+                              </Link>
+                            ) : null}
                           </div>
                         )}
                       
@@ -805,11 +875,11 @@ export default function NewDashboardPage() {
           </div>
 
           {/* Right Sidebar - Quick Links */}
-          <aside className="w-56 border-l border-gray-200 bg-white py-4 px-3 overflow-y-auto flex-shrink-0">
-            <div className="space-y-4">
+          <aside className="w-64 border-l border-gray-200/60 bg-white/50 backdrop-blur-sm py-5 px-4 overflow-y-auto flex-shrink-0 hidden xl:block">
+            <div className="space-y-6">
               <div>
-                <h3 className="text-[10px] uppercase tracking-wider text-gray-400 mb-3 px-2 font-semibold">Quick Access</h3>
-                <div className="space-y-1">
+                <h3 className="text-[11px] uppercase tracking-wider text-gray-400 mb-3 px-2 font-bold">Quick Access</h3>
+                <div className="space-y-1.5">
                   {quickLinks.map((link, index) => {
                     const gradients = [
                       'from-blue-500 to-indigo-600',
@@ -824,12 +894,12 @@ export default function NewDashboardPage() {
                       <Link
                         key={index}
                         href={link.href}
-                        className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-all group"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white hover:shadow-sm hover:shadow-gray-200/50 transition-all group border border-transparent hover:border-gray-100"
                       >
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradients[index % gradients.length]} flex items-center justify-center text-white shadow-sm flex-shrink-0`}>
-                          <link.icon size={16} />
+                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradients[index % gradients.length]} flex items-center justify-center text-white shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform`}>
+                          <link.icon size={14} />
                         </div>
-                        <span className="text-xs font-medium text-gray-700 group-hover:text-gray-900 truncate">
+                        <span className="text-xs font-medium text-gray-600 group-hover:text-gray-900 truncate">
                           {link.title}
                         </span>
                       </Link>
@@ -838,20 +908,20 @@ export default function NewDashboardPage() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 pt-3">
-                <h3 className="text-[10px] uppercase tracking-wider text-gray-400 mb-3 px-2 font-semibold">Help</h3>
-                <div className="space-y-1">
-                  <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-all text-left group">
+              <div className="border-t border-gray-200/60 pt-4">
+                <h3 className="text-[11px] uppercase tracking-wider text-gray-400 mb-3 px-2 font-bold">Help</h3>
+                <div className="space-y-1.5">
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white hover:shadow-sm hover:shadow-gray-200/50 transition-all text-left group border border-transparent hover:border-gray-100">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center text-white shadow-sm flex-shrink-0">
-                      <MessageSquare size={16} />
+                      <MessageSquare size={14} />
                     </div>
-                    <span className="text-xs font-medium text-gray-700 group-hover:text-gray-900">Support</span>
+                    <span className="text-xs font-medium text-gray-600 group-hover:text-gray-900">Support</span>
                   </button>
-                  <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-all text-left group">
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white hover:shadow-sm hover:shadow-gray-200/50 transition-all text-left group border border-transparent hover:border-gray-100">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-700 flex items-center justify-center text-white shadow-sm flex-shrink-0">
-                      <FileText size={16} />
+                      <FileText size={14} />
                     </div>
-                    <span className="text-xs font-medium text-gray-700 group-hover:text-gray-900">Docs</span>
+                    <span className="text-xs font-medium text-gray-600 group-hover:text-gray-900">Docs</span>
                   </button>
                 </div>
               </div>
@@ -860,40 +930,40 @@ export default function NewDashboardPage() {
         </div>
 
         {/* Input Area */}
-        <div className="w-full border-t border-gray-200 bg-white">
-          <div className="max-w-5xl mx-auto px-6 py-4">
+        <div className="w-full bg-gradient-to-t from-white via-white to-transparent pb-6 pt-2 px-6 z-20">
+          <div className="max-w-4xl mx-auto">
             {selectedTool && (
-              <div className="mb-3 flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-                  <div className={`w-5 h-5 rounded bg-gradient-to-br ${agentTools.find(t => t.key === selectedTool)?.color} flex items-center justify-center text-white`}>
+              <div className="mb-3 flex items-center gap-2 flex-wrap animate-in slide-in-from-bottom-2 fade-in duration-300">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50/80 backdrop-blur-sm border border-blue-200/60 rounded-full text-sm shadow-sm">
+                  <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${agentTools.find(t => t.key === selectedTool)?.color} flex items-center justify-center text-white`}>
                     {(() => {
                       const Icon = agentTools.find(t => t.key === selectedTool)?.icon;
-                      return Icon ? <Icon size={12} /> : null;
+                      return Icon ? <Icon size={10} /> : null;
                     })()}
                   </div>
-                  <span className="font-medium text-blue-900">{agentTools.find(t => t.key === selectedTool)?.label}</span>
+                  <span className="font-medium text-blue-900 text-xs">{agentTools.find(t => t.key === selectedTool)?.label}</span>
                   <button
                     onClick={() => { setSelectedTool(null); setSelectedDocumentType(null); }}
-                    className="ml-1 text-blue-600 hover:text-blue-800"
+                    className="ml-1 text-blue-400 hover:text-blue-700 p-0.5 rounded-full hover:bg-blue-100 transition-colors"
                   >
-                    <X size={14} />
+                    <X size={12} />
                   </button>
                 </div>
                 {/* Document Type Badge - when Document Builder with type selected */}
                 {selectedTool === "document_builder" && selectedDocumentType && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-sm">
-                    <div className={`w-5 h-5 rounded bg-gradient-to-br ${documentTypeOptions.find(d => d.key === selectedDocumentType)?.color} flex items-center justify-center text-white`}>
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50/80 backdrop-blur-sm border border-purple-200/60 rounded-full text-sm shadow-sm">
+                    <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${documentTypeOptions.find(d => d.key === selectedDocumentType)?.color} flex items-center justify-center text-white`}>
                       {(() => {
                         const Icon = documentTypeOptions.find(d => d.key === selectedDocumentType)?.icon;
-                        return Icon ? <Icon size={12} /> : null;
+                        return Icon ? <Icon size={10} /> : null;
                       })()}
                     </div>
-                    <span className="font-medium text-purple-900">{documentTypeOptions.find(d => d.key === selectedDocumentType)?.label}</span>
+                    <span className="font-medium text-purple-900 text-xs">{documentTypeOptions.find(d => d.key === selectedDocumentType)?.label}</span>
                     <button
                       onClick={() => setSelectedDocumentType(null)}
-                      className="ml-1 text-purple-600 hover:text-purple-800"
+                      className="ml-1 text-purple-400 hover:text-purple-700 p-0.5 rounded-full hover:bg-purple-100 transition-colors"
                     >
-                      <X size={14} />
+                      <X size={12} />
                     </button>
                   </div>
                 )}
@@ -902,13 +972,13 @@ export default function NewDashboardPage() {
                   <div className="relative" ref={documentTypeDropdownRef}>
                     <button
                       onClick={() => setShowDocumentTypeDropdown(!showDocumentTypeDropdown)}
-                      className="flex items-center gap-1 px-2 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors border border-transparent hover:border-gray-200"
                     >
-                      <ChevronDown size={14} className={`transition-transform ${showDocumentTypeDropdown ? 'rotate-180' : ''}`} />
+                      <ChevronDown size={12} className={`transition-transform ${showDocumentTypeDropdown ? 'rotate-180' : ''}`} />
                       <span>{selectedDocumentType ? 'Change' : 'Select type'}</span>
                     </button>
                     {showDocumentTypeDropdown && (
-                      <div className="absolute bottom-full left-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px] z-10">
+                      <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl py-1 min-w-[180px] z-30 animate-in zoom-in-95 duration-200">
                         {documentTypeOptions.map((docType) => (
                           <button
                             key={docType.key}
@@ -916,13 +986,12 @@ export default function NewDashboardPage() {
                               setSelectedDocumentType(docType.key);
                               setShowDocumentTypeDropdown(false);
                             }}
-                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${
                               selectedDocumentType === docType.key ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
                             }`}
                           >
                             <docType.icon size={14} />
-                            <span>{docType.label}</span>
-                            <span className="text-xs text-gray-400 ml-auto">{docType.description}</span>
+                            <span className="font-medium">{docType.label}</span>
                           </button>
                         ))}
                       </div>
@@ -931,10 +1000,10 @@ export default function NewDashboardPage() {
                 )}
               </div>
             )}
-            <div className="bg-white border-2 border-gray-200 rounded-2xl shadow-sm hover:border-gray-300 transition-colors">
+            <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 rounded-3xl shadow-2xl shadow-gray-200/50 hover:border-blue-300/50 hover:shadow-blue-500/10 transition-all duration-300 ring-1 ring-gray-100">
               {/* Selected Files Preview - Shows both uploaded and selected previous files */}
               {(uploadedFiles.length > 0 || selectedFileIds.length > 0) && (
-                <div className="px-3 pt-3 pb-1 border-b border-gray-100">
+                <div className="px-4 pt-3 pb-1 border-b border-gray-100/50">
                   <div className="flex flex-wrap gap-2">
                     {/* Show newly uploaded files */}
                     {uploadedFiles.map((file, idx) => {
@@ -942,11 +1011,11 @@ export default function NewDashboardPage() {
                       return (
                         <div 
                           key={`upload-${file.id}-${idx}`} 
-                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs border ${
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border shadow-sm ${
                             file.status === "uploading" ? "bg-blue-50 border-blue-200" :
                             file.status === "processing" ? "bg-amber-50 border-amber-200" :
                             file.status === "error" ? "bg-red-50 border-red-200" :
-                            "bg-green-50 border-green-200"
+                            "bg-white border-gray-200"
                           }`}
                         >
                           {file.status === "uploading" || file.status === "processing" ? (
@@ -959,11 +1028,11 @@ export default function NewDashboardPage() {
                               <Check size={12} className="text-green-600" />
                             </>
                           )}
-                          <span className="max-w-[100px] truncate font-medium">{file.name}</span>
+                          <span className="max-w-[100px] truncate font-medium text-gray-700">{file.name}</span>
                           <span className="text-gray-400">{formatFileSize(file.size)}</span>
                           <button 
                             onClick={() => removeUploadedFile(file.id)}
-                            className="p-0.5 text-gray-400 hover:text-gray-600"
+                            className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
                           >
                             <X size={12} />
                           </button>
@@ -980,10 +1049,10 @@ export default function NewDashboardPage() {
                         return (
                           <div 
                             key={`prev-chip-${file.id}-${idx}`} 
-                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs border ${
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border shadow-sm ${
                               chipStatus === "processing" ? "bg-amber-50 border-amber-200" :
                               chipStatus === "error" ? "bg-red-50 border-red-200" :
-                              "bg-green-50 border-green-200"
+                              "bg-white border-gray-200"
                             }`}
                           >
                             {chipStatus === "processing" ? (
@@ -996,11 +1065,11 @@ export default function NewDashboardPage() {
                                 <Check size={12} className="text-green-600" />
                               </>
                             )}
-                            <span className="max-w-[100px] truncate font-medium">{file.name}</span>
+                            <span className="max-w-[100px] truncate font-medium text-gray-700">{file.name}</span>
                             <span className="text-gray-400">{formatFileSize(file.size)}</span>
                             <button 
                               onClick={() => toggleFileSelection(file.id)}
-                              className="p-0.5 text-gray-400 hover:text-gray-600"
+                              className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
                               title="Remove attachment"
                             >
                               <X size={12} />
@@ -1012,9 +1081,9 @@ export default function NewDashboardPage() {
                 </div>
               )}
               
-              <div className="flex items-center gap-3 p-3">
+              <div className="flex items-center gap-2 p-2 pl-4">
                 <button 
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                  className="text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all p-2 rounded-xl"
                   onClick={() => setShowFilePanel(!showFilePanel)}
                   data-file-trigger
                   title="Attach files"
@@ -1023,38 +1092,45 @@ export default function NewDashboardPage() {
                 </button>
                 <button 
                   onClick={onUploadClick}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                  className="text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all p-2 rounded-xl"
                   title="Upload new file"
                 >
                   <Paperclip size={20} />
                 </button>
-                <div className="flex-1 flex items-center">
-                  <input
-                    type="text"
+                <div className="flex-1 flex items-center py-2">
+                  <textarea
+                    ref={chatInputRef}
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      // Auto-grow up to a reasonable height.
+                      e.currentTarget.style.height = 'auto';
+                      e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 160)}px`;
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
+                      if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         onSend();
                       }
                     }}
-                    className="flex-1 bg-transparent border-none outline-none text-gray-900 placeholder-gray-400 text-[15px] px-2"
+                    rows={1}
+                    className="flex-1 bg-transparent border-none outline-none text-gray-900 placeholder-gray-400 text-[15px] px-2 font-medium resize-none leading-relaxed"
                     placeholder={placeholder}
                     disabled={isSending}
                   />
                 </div>
                 <button
                   onClick={() => alert("Voice input coming soon")}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                  className="text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all p-2 rounded-xl"
                   title="Voice input"
                 >
                   <Mic size={20} />
                 </button>
+
                 <button
                   onClick={onSend}
                   disabled={isSending || !input.trim()}
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:text-gray-500 text-white rounded-xl px-4 py-2 transition-all flex items-center gap-2 font-medium disabled:cursor-not-allowed shadow-sm"
+                  className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 disabled:from-gray-200 disabled:to-gray-300 disabled:text-gray-400 text-white rounded-xl px-4 py-2.5 transition-all flex items-center gap-2 font-medium disabled:cursor-not-allowed shadow-md shadow-blue-500/20 disabled:shadow-none m-1"
                 >
                   {isSending ? (
                     <Loader2 size={18} className="animate-spin" />
@@ -1074,26 +1150,26 @@ export default function NewDashboardPage() {
               
               {/* File Panel - shows previous files */}
               {showFilePanel && selectedTool === "document_builder" && (
-                <div ref={filePanelRef} className="border-t border-gray-100 p-3 bg-gray-50 rounded-b-2xl">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-gray-600">Previously Uploaded Files</span>
+                <div ref={filePanelRef} className="border-t border-gray-100 p-4 bg-gray-50/50 rounded-b-3xl backdrop-blur-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Previously Uploaded Files</span>
                     <button 
                       onClick={loadPreviousFiles}
-                      className="text-xs text-blue-600 hover:text-blue-700"
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                     >
                       Refresh
                     </button>
                   </div>
                   {isLoadingFiles ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 size={16} className="animate-spin text-gray-400" />
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 size={20} className="animate-spin text-blue-500" />
                     </div>
                   ) : previousFiles.length === 0 ? (
-                    <div className="text-xs text-gray-400 text-center py-4">
+                    <div className="text-xs text-gray-400 text-center py-6 bg-white rounded-xl border border-dashed border-gray-200">
                       No files uploaded yet. Upload a CV, transcript, or other document to use {selectedDocumentType === 'analyze' ? 'for analysis' : `in your ${selectedDocumentType?.toUpperCase() || "document"}`}.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
                       {previousFiles.map((file, idx) => {
                         const FileIcon = getFileIcon(file.type);
                         const isSelected = selectedFileIds.includes(file.id);
@@ -1102,24 +1178,24 @@ export default function NewDashboardPage() {
                           <button
                             key={`prev-${file.id}-${idx}`}
                             onClick={() => toggleFileSelection(file.id)}
-                            className={`flex items-center gap-2 p-2 rounded-lg text-left text-xs transition-colors border ${
+                            className={`flex items-center gap-3 p-2.5 rounded-xl text-left text-xs transition-all border ${
                               isSelected 
-                                ? "bg-blue-50 border-blue-200 text-blue-700" 
-                                : "bg-white border-gray-200 hover:bg-gray-100 text-gray-700"
+                                ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm" 
+                                : "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200 text-gray-700"
                             }`}
                           >
                             {status === "processing" ? (
-                              <Loader2 size={14} className="animate-spin text-amber-600" />
+                              <Loader2 size={16} className="animate-spin text-amber-600" />
                             ) : status === "error" ? (
-                              <AlertCircle size={14} className="text-red-500" />
+                              <AlertCircle size={16} className="text-red-500" />
                             ) : (
-                              <FileIcon size={14} className={isSelected ? "text-blue-500" : "text-gray-400"} />
+                              <FileIcon size={16} className={isSelected ? "text-blue-500" : "text-gray-400"} />
                             )}
                             <div className="flex-1 min-w-0">
-                              <div className="truncate font-medium">{file.name}</div>
-                              <div className="text-[10px] text-gray-400">{formatFileSize(file.size)}</div>
+                              <div className="truncate font-medium text-[13px]">{file.name}</div>
+                              <div className="text-[10px] text-gray-400 mt-0.5">{formatFileSize(file.size)}</div>
                             </div>
-                            {isSelected && <Check size={14} className="text-blue-500 flex-shrink-0" />}
+                            {isSelected && <Check size={16} className="text-blue-500 flex-shrink-0" />}
                           </button>
                         );
                       })}
@@ -1128,10 +1204,10 @@ export default function NewDashboardPage() {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-500">
-              <button className="hover:text-gray-700 transition-colors">Try Assistant</button>
-              <button className="hover:text-gray-700 transition-colors">Customize</button>
-              <button className="hover:text-gray-700 transition-colors">Invite Friends</button>
+            <div className="flex items-center justify-center gap-6 mt-4 text-[11px] font-medium text-gray-400">
+              <button className="hover:text-gray-600 transition-colors">Try Assistant</button>
+              <button className="hover:text-gray-600 transition-colors">Customize</button>
+              <button className="hover:text-gray-600 transition-colors">Invite Friends</button>
             </div>
           </div>
         </div>

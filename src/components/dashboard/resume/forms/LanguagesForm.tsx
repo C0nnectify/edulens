@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Languages as LanguagesIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,11 @@ export default function LanguagesForm({ resume, onUpdate }: LanguagesFormProps) 
   const [languages, setLanguages] = useState<Language[]>(resume.languages || []);
   const [newLanguage, setNewLanguage] = useState('');
   const [newProficiency, setNewProficiency] = useState<Language['proficiency']>('intermediate');
+
+  // Keep local list in sync when resume loads/changes.
+  useEffect(() => {
+    setLanguages(resume.languages || []);
+  }, [resume.languages]);
 
   const handleAddLanguage = () => {
     if (!newLanguage.trim()) return;

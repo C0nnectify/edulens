@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -35,8 +35,9 @@ const projectSchema = z.object({
   role: z.string().optional(),
   technologies: z.string().min(1, 'Technologies are required'),
   achievements: z.string().optional(),
-  url: z.string().url().optional().or(z.literal('')),
-  github: z.string().url().optional().or(z.literal('')),
+  // Accept free-form; normalize to https://... on submit.
+  url: z.string().optional().or(z.literal('')),
+  github: z.string().optional().or(z.literal('')),
 });
 
 type ProjectFormData = z.infer<typeof projectSchema>;
@@ -51,6 +52,24 @@ export default function ProjectsForm({ resume, onUpdate }: ProjectsFormProps) {
   const [projects, setProjects] = useState<Project[]>(resume.projects || []);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  // Keep local list in sync when resume loads/changes.
+  useEffect(() => {
+    setProjects(resume.projects || []);
+  }, [resume.projects]);
+
+  const normalizeUrl = (value: unknown): string => {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) return '';
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+      const parsed = new URL(withScheme);
+      if (!parsed.hostname || !parsed.hostname.includes('.')) return '';
+      return parsed.toString();
+    } catch {
+      return '';
+    }
+  };
 
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
@@ -101,9 +120,9 @@ export default function ProjectsForm({ resume, onUpdate }: ProjectsFormProps) {
       technologies: data.technologies.split(',').map((t) => t.trim()).filter((t) => t),
       achievements: data.achievements ? data.achievements.split('\n').filter((a) => a.trim()) : [],
       bullets: data.achievements ? data.achievements.split('\n').filter((a) => a.trim()) : [],
-      url: data.url,
-      github: data.github,
-      githubUrl: data.github,
+      url: normalizeUrl(data.url),
+      github: normalizeUrl(data.github),
+      githubUrl: normalizeUrl(data.github),
     };
 
     let newProjects: Project[];

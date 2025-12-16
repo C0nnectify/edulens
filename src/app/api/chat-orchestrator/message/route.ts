@@ -4,7 +4,7 @@ import { getChatCollections, deriveSessionTitle } from "@/lib/db/chatHistory";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { sessionId, message, feature, documentType, attachmentIds } = body || {};
+  const { sessionId, message, feature, documentType, attachmentIds, generateDraft } = body || {};
 
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session?.user?.id) {
@@ -20,6 +20,44 @@ export async function POST(req: NextRequest) {
     ? sessionId
     : `chat_${crypto.randomUUID()}`;
 
+  // Build short-term + long-term context for this session.
+  // Short-term: last 8 messages (4 user/ai pairs)
+  // Long-term: rolling summary stored on the session doc
+  let sessionSummary: string | null = null;
+  let activeAttachmentIds: string[] = [];
+  let recentMessages: Array<{ role: "user" | "ai"; content: string }> = [];
+  try {
+    const { sessions, messages } = await getChatCollections();
+    const [sessionDoc, tail] = await Promise.all([
+      sessions.findOne({ userId, sessionId: resolvedSessionId }),
+      messages
+        .find({ userId, sessionId: resolvedSessionId })
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .toArray(),
+    ]);
+    sessionSummary = (sessionDoc?.summary ?? null) as string | null;
+    activeAttachmentIds = Array.isArray(sessionDoc?.activeAttachmentIds)
+      ? (sessionDoc?.activeAttachmentIds as string[])
+      : [];
+    recentMessages = tail
+      .reverse()
+      .map((m) => ({ role: m.role, content: m.content }))
+      .filter((m) => m.role === "user" || m.role === "ai");
+  } catch (e) {
+    // Non-fatal; chat can still proceed without memory.
+    console.warn("[chat-orchestrator] Failed to load context", e);
+  }
+
+  // Sticky file context (Option A):
+  // - If request includes attachmentIds as an array, it replaces the active set (empty array clears).
+  // - If request omits attachmentIds, reuse the previous active set.
+  const hasAttachmentIds = Array.isArray(attachmentIds);
+  const normalizedIncomingAttachmentIds = hasAttachmentIds
+    ? (attachmentIds as unknown[]).filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    : null;
+  const effectiveAttachmentIds = hasAttachmentIds ? normalizedIncomingAttachmentIds! : activeAttachmentIds;
+
   // Persist the user message + session metadata before calling the AI service.
   // This makes history available immediately and keeps it durable even if the AI service fails.
   try {
@@ -33,7 +71,8 @@ export async function POST(req: NextRequest) {
         role: "user",
         content: message,
         createdAt: now,
-        attachments: Array.isArray(attachmentIds) ? attachmentIds : [],
+        // Persist the effective attachments used for this turn.
+        attachments: effectiveAttachmentIds,
       }),
       sessions.updateOne(
         { userId, sessionId: resolvedSessionId },
@@ -49,6 +88,12 @@ export async function POST(req: NextRequest) {
             feature: typeof feature === "string" ? feature : undefined,
             documentType: typeof documentType === "string" ? documentType : null,
             lastMessage: message,
+            ...(hasAttachmentIds
+              ? {
+                  activeAttachmentIds: effectiveAttachmentIds,
+                  activeAttachmentUpdatedAt: now,
+                }
+              : {}),
           },
           $inc: { messageCount: 1 },
         },
@@ -71,7 +116,11 @@ export async function POST(req: NextRequest) {
         message,
         feature,
         document_type: documentType ?? undefined,
-        attachments: attachmentIds ?? [],
+        attachments: effectiveAttachmentIds,
+        generate_draft: Boolean(generateDraft),
+        // Memory payload
+        session_summary: sessionSummary ?? "",
+        recent_messages: recentMessages,
       }),
     });
     if (!resp.ok) {
@@ -85,6 +134,7 @@ export async function POST(req: NextRequest) {
       const { sessions, messages } = await getChatCollections();
       const now = new Date();
       const answer = typeof data?.answer === "string" ? data.answer : "";
+      const updatedSummary = typeof data?.updated_summary === "string" ? data.updated_summary : undefined;
 
       await Promise.all([
         messages.insertOne({
@@ -101,6 +151,7 @@ export async function POST(req: NextRequest) {
             $set: {
               updatedAt: now,
               lastMessage: answer,
+              ...(updatedSummary !== undefined ? { summary: updatedSummary, summaryUpdatedAt: now } : {}),
             },
             $inc: { messageCount: 1 },
           }
@@ -119,12 +170,12 @@ export async function POST(req: NextRequest) {
       progress: data.progress,
       action: data.action,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     // Optional: persist an error message so the user can see a complete transcript.
     try {
       const { sessions, messages } = await getChatCollections();
       const now = new Date();
-      const errorText = e?.message || "Network error";
+      const errorText = e instanceof Error ? e.message : "Network error";
       await Promise.all([
         messages.insertOne({
           userId,
@@ -141,6 +192,7 @@ export async function POST(req: NextRequest) {
     } catch {
       // ignore
     }
-    return NextResponse.json({ error: e?.message || "Network error" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : "Network error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

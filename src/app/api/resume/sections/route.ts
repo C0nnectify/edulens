@@ -31,17 +31,28 @@ const customSectionSchema = z.object({
   }),
 });
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function getSectionId(value: unknown): string | undefined {
+  const r = asRecord(value);
+  return typeof r.id === 'string' ? r.id : undefined;
+}
+
 // POST: Add or update custom section
 export async function POST(req: NextRequest) {
   try {
     // Authenticate user
     const authResult = await authenticateRequest(req);
-    if (!authResult.authenticated) {
+    if (!authResult.authenticated || !authResult.user) {
       return errorResponse(authResult.error || 'Unauthorized', 401);
     }
 
+    const user = authResult.user;
+
     // Rate limiting
-    if (!checkRateLimit(authResult.user.id, 50, 60000)) {
+    if (!checkRateLimit(user.id, 50, 60000)) {
       return errorResponse('Rate limit exceeded', 429);
     }
 
@@ -65,7 +76,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('Resume not found', 404);
     }
 
-    if (resume.userId !== authResult.user.id) {
+    if (resume.userId !== user.id) {
       return errorResponse('Unauthorized access to resume', 403);
     }
 
@@ -74,7 +85,7 @@ export async function POST(req: NextRequest) {
 
     if (section.id) {
       // Update existing section
-      const index = customSections.findIndex((s: any) => s.id === section.id);
+      const index = customSections.findIndex((s: unknown) => getSectionId(s) === section.id);
       if (index >= 0) {
         customSections[index] = section;
       } else {
@@ -92,7 +103,7 @@ export async function POST(req: NextRequest) {
     await resume.save();
 
     // Log update
-    console.log(`User ${authResult.user.id} updated custom sections for resume ${resumeId}`);
+    console.log(`User ${user.id} updated custom sections for resume ${resumeId}`);
 
     return successResponse({
       customSections: resume.customSections,
@@ -108,12 +119,14 @@ export async function DELETE(req: NextRequest) {
   try {
     // Authenticate user
     const authResult = await authenticateRequest(req);
-    if (!authResult.authenticated) {
+    if (!authResult.authenticated || !authResult.user) {
       return errorResponse(authResult.error || 'Unauthorized', 401);
     }
 
+    const user = authResult.user;
+
     // Rate limiting
-    if (!checkRateLimit(authResult.user.id, 50, 60000)) {
+    if (!checkRateLimit(user.id, 50, 60000)) {
       return errorResponse('Rate limit exceeded', 429);
     }
 
@@ -135,18 +148,18 @@ export async function DELETE(req: NextRequest) {
       return errorResponse('Resume not found', 404);
     }
 
-    if (resume.userId !== authResult.user.id) {
+    if (resume.userId !== user.id) {
       return errorResponse('Unauthorized access to resume', 403);
     }
 
     // Remove custom section
     const customSections = resume.customSections || [];
-    resume.customSections = customSections.filter((s: any) => s.id !== sectionId);
+    resume.customSections = customSections.filter((s: unknown) => getSectionId(s) !== sectionId);
     resume.updatedAt = new Date();
     await resume.save();
 
     // Log deletion
-    console.log(`User ${authResult.user.id} deleted custom section ${sectionId} from resume ${resumeId}`);
+    console.log(`User ${user.id} deleted custom section ${sectionId} from resume ${resumeId}`);
 
     return successResponse({
       customSections: resume.customSections,
@@ -162,12 +175,14 @@ export async function PUT(req: NextRequest) {
   try {
     // Authenticate user
     const authResult = await authenticateRequest(req);
-    if (!authResult.authenticated) {
+    if (!authResult.authenticated || !authResult.user) {
       return errorResponse(authResult.error || 'Unauthorized', 401);
     }
 
+    const user = authResult.user;
+
     // Rate limiting
-    if (!checkRateLimit(authResult.user.id, 50, 60000)) {
+    if (!checkRateLimit(user.id, 50, 60000)) {
       return errorResponse('Rate limit exceeded', 429);
     }
 
@@ -188,7 +203,7 @@ export async function PUT(req: NextRequest) {
       return errorResponse('Resume not found', 404);
     }
 
-    if (resume.userId !== authResult.user.id) {
+    if (resume.userId !== user.id) {
       return errorResponse('Unauthorized access to resume', 403);
     }
 
@@ -198,7 +213,7 @@ export async function PUT(req: NextRequest) {
     await resume.save();
 
     // Log update
-    console.log(`User ${authResult.user.id} reordered custom sections for resume ${resumeId}`);
+    console.log(`User ${user.id} reordered custom sections for resume ${resumeId}`);
 
     return successResponse({
       customSections: resume.customSections,
@@ -210,7 +225,7 @@ export async function PUT(req: NextRequest) {
 }
 
 // OPTIONS: Handle CORS preflight
-export async function OPTIONS(req: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {

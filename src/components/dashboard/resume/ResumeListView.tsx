@@ -38,13 +38,13 @@ import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
 interface ResumeListViewProps {
-  userId?: string;
+  documentType?: 'resume' | 'cv';
 }
 
 type SortOption = 'updatedAt' | 'createdAt' | 'title' | 'atsScore';
 type ViewMode = 'grid' | 'list';
 
-export function ResumeListView({ userId = 'demo-user' }: ResumeListViewProps) {
+export function ResumeListView({ documentType = 'resume' }: ResumeListViewProps) {
   const router = useRouter();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,19 +59,25 @@ export function ResumeListView({ userId = 'demo-user' }: ResumeListViewProps) {
   const fetchResumes = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
-        userId,
-        sortBy,
-        sortOrder: sortBy === 'title' ? 'asc' : 'desc',
-        ...(filterFavorites && { isFavorite: 'true' }),
-        ...(filterCategory !== 'all' && { industryTarget: filterCategory }),
-      });
+      if (documentType === 'resume') {
+        const params = new URLSearchParams({
+          page: '1',
+          limit: '100',
+          sort: sortBy === 'title' ? 'title' : '-updatedAt',
+        });
+        const response = await fetch(`/api/resume?${params}`);
+        const data = await response.json();
+        if (data?.success && data?.data?.resumes) {
+          setResumes(data.data.resumes);
+        }
+        return;
+      }
 
-      const response = await fetch(`/api/resume/list?${params}`);
+      const params = new URLSearchParams({ page: '1', limit: '100' });
+      const response = await fetch(`/api/cv?${params}`);
       const data = await response.json();
-
-      if (data.success) {
-        setResumes(data.resumes);
+      if (data?.success && data?.data?.cvs) {
+        setResumes(data.data.cvs);
       }
     } catch (error) {
       console.error('Failed to fetch resumes:', error);
@@ -86,7 +92,11 @@ export function ResumeListView({ userId = 'demo-user' }: ResumeListViewProps) {
 
   // Handlers
   const handleEdit = (resumeId: string) => {
-    router.push(`/dashboard/document-builder/resume/editor-v2?id=${resumeId}`);
+    if (documentType === 'resume') {
+      router.push(`/dashboard/document-builder/resume/editor-v2?id=${resumeId}`);
+    } else {
+      router.push(`/dashboard/document-builder/cv/editor-v2?id=${resumeId}`);
+    }
   };
 
   const handleDuplicate = async (resumeId: string) => {
@@ -151,20 +161,36 @@ export function ResumeListView({ userId = 'demo-user' }: ResumeListViewProps) {
 
   const handleCreateNew = async (template?: string) => {
     try {
-      const response = await fetch('/api/resume/create', {
+      if (documentType === 'resume') {
+        const response = await fetch('/api/resume/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: 'Untitled Resume',
+            template,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.resume) {
+          router.push(`/dashboard/document-builder/resume/editor-v2?id=${data.resume._id}`);
+        }
+        return;
+      }
+
+      const response = await fetch('/api/cv/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: 'Untitled Resume',
-          userId,
+          title: 'Untitled CV',
           template,
         }),
       });
 
       const data = await response.json();
-
-      if (data.success && data.resume) {
-        router.push(`/dashboard/document-builder/resume/editor-v2?id=${data.resume._id}`);
+      if (data.success && data.cv) {
+        router.push(`/dashboard/document-builder/cv/editor-v2?id=${data.cv._id}`);
       }
     } catch (error) {
       console.error('Failed to create resume:', error);
@@ -185,9 +211,9 @@ export function ResumeListView({ userId = 'demo-user' }: ResumeListViewProps) {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold">My Resumes</h1>
+            <h1 className="text-3xl font-bold">My {documentType === 'cv' ? 'CVs' : 'Resumes'}</h1>
             <p className="text-muted-foreground mt-1">
-              {filteredResumes.length} resume{filteredResumes.length !== 1 && 's'}
+              {filteredResumes.length} {documentType === 'cv' ? 'CV' : 'resume'}{filteredResumes.length !== 1 && 's'}
             </p>
           </div>
 
@@ -195,14 +221,14 @@ export function ResumeListView({ userId = 'demo-user' }: ResumeListViewProps) {
             <DialogTrigger asChild>
               <Button size="lg" className="gap-2">
                 <Plus className="w-4 h-4" />
-                Create Resume
+                Create {documentType === 'cv' ? 'CV' : 'Resume'}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Resume</DialogTitle>
+                <DialogTitle>Create New {documentType === 'cv' ? 'CV' : 'Resume'}</DialogTitle>
                 <DialogDescription>
-                  Choose how you want to create your resume
+                  Choose how you want to create your {documentType === 'cv' ? 'CV' : 'resume'}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-3 py-4">
@@ -216,44 +242,48 @@ export function ResumeListView({ userId = 'demo-user' }: ResumeListViewProps) {
                 >
                   <FileText className="mr-3 h-5 w-5" />
                   <div className="text-left">
-                    <div className="font-semibold">Blank Resume</div>
+                    <div className="font-semibold">Blank {documentType === 'cv' ? 'CV' : 'Resume'}</div>
                     <div className="text-sm text-muted-foreground">
                       Start from scratch
                     </div>
                   </div>
                 </Button>
-                <Button
-                  variant="outline"
-                  className="justify-start h-auto p-4"
-                  onClick={() => {
-                    router.push('/dashboard/document-builder/resume/templates');
-                    setShowCreateDialog(false);
-                  }}
-                >
-                  <Grid3x3 className="mr-3 h-5 w-5" />
-                  <div className="text-left">
-                    <div className="font-semibold">From Template</div>
-                    <div className="text-sm text-muted-foreground">
-                      Choose from 21+ industry-specific templates
-                    </div>
-                  </div>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="justify-start h-auto p-4"
-                  onClick={() => {
-                    router.push('/dashboard/document-builder/resume/import');
-                    setShowCreateDialog(false);
-                  }}
-                >
-                  <FileUp className="mr-3 h-5 w-5" />
-                  <div className="text-left">
-                    <div className="font-semibold">Import Resume</div>
-                    <div className="text-sm text-muted-foreground">
-                      From LinkedIn, PDF, DOCX, or JSON
-                    </div>
-                  </div>
-                </Button>
+                {documentType !== 'cv' && (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="justify-start h-auto p-4"
+                      onClick={() => {
+                        router.push('/dashboard/document-builder/resume/templates');
+                        setShowCreateDialog(false);
+                      }}
+                    >
+                      <Grid3x3 className="mr-3 h-5 w-5" />
+                      <div className="text-left">
+                        <div className="font-semibold">From Template</div>
+                        <div className="text-sm text-muted-foreground">
+                          Choose from 21+ industry-specific templates
+                        </div>
+                      </div>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="justify-start h-auto p-4"
+                      onClick={() => {
+                        router.push('/dashboard/document-builder/resume/import');
+                        setShowCreateDialog(false);
+                      }}
+                    >
+                      <FileUp className="mr-3 h-5 w-5" />
+                      <div className="text-left">
+                        <div className="font-semibold">Import Resume</div>
+                        <div className="text-sm text-muted-foreground">
+                          From LinkedIn, PDF, DOCX, or JSON
+                        </div>
+                      </div>
+                    </Button>
+                  </>
+                )}
               </div>
             </DialogContent>
           </Dialog>

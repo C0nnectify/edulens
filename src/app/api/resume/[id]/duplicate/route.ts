@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongoose';
 import { ResumeModel } from '@/lib/db/models/Resume';
 import { ObjectId } from 'mongodb';
+import { authenticateRequest } from '@/lib/api-utils';
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
 
 /**
  * POST /api/resume/:id/duplicate
@@ -12,9 +17,17 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.authenticated || !authResult.user) {
+      return NextResponse.json(
+        { success: false, error: authResult.error || 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const { id } = params;
-    const body = await request.json();
-    const { title } = body;
+    const body = asRecord(await request.json());
+    const title = typeof body.title === 'string' ? body.title : undefined;
 
     if (!ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -25,7 +38,7 @@ export async function POST(
 
     await connectDB();
 
-    const sourceResume = await ResumeModel.findById(id).lean();
+    const sourceResume = await ResumeModel.findOne({ _id: id, userId: authResult.user.id }).lean<Record<string, unknown>>();
 
     if (!sourceResume) {
       return NextResponse.json(
@@ -35,14 +48,18 @@ export async function POST(
     }
 
     // Create duplicate with new title and reset metadata
-    const duplicatedResume: any = {
+    const sourceTitle = typeof sourceResume.title === 'string' ? sourceResume.title : 'Untitled Resume';
+    const sourceMetadata = asRecord(sourceResume.metadata);
+
+    const duplicatedResume: Record<string, unknown> = {
       ...sourceResume,
       _id: undefined,
-      title: title || `${sourceResume.title} (Copy)`,
+      userId: authResult.user.id,
+      title: title || `${sourceTitle} (Copy)`,
       createdAt: new Date(),
       updatedAt: new Date(),
       metadata: {
-        ...sourceResume.metadata,
+        ...sourceMetadata,
         version: 1,
         isFavorite: false,
       },

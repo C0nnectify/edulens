@@ -11,6 +11,10 @@ export type ChatSessionDoc = {
   documentType?: string | null;
   messageCount: number;
   lastMessage?: string;
+  summary?: string | null;
+  summaryUpdatedAt?: Date | null;
+  activeAttachmentIds?: string[];
+  activeAttachmentUpdatedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };

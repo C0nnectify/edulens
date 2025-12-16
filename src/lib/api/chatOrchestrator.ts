@@ -15,6 +15,7 @@ export type SendMessageParams = {
   feature: "document_builder" | "tracker" | "monitoring_agent" | "analysis" | "roadmap" | "general";
   documentType?: DocumentType;  // For document_builder feature
   attachmentIds?: string[];  // IDs of previously uploaded files to include
+  generateDraft?: boolean; // When true, backend should generate a document draft (no auto-generation).
 };
 
 export type DocumentProgress = {

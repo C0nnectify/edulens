@@ -1,179 +1,164 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongoose';
-import { ResumeModel } from '@/lib/db/models/Resume';
+import { CVModel } from '@/lib/db/models/CV';
 import { ObjectId } from 'mongodb';
 import { authenticateRequest, handleValidationError } from '@/lib/api-utils';
 import { updateResumeSchema } from '@/lib/validations/resume';
 
-/**
- * GET /api/resume/:id
- * Get a specific resume by ID
- */
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const authResult = await authenticateRequest(request);
-    if (!authResult.authenticated) {
+    if (!authResult.authenticated || !authResult.user) {
       return NextResponse.json(
         { success: false, error: authResult.error || 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const { id } = params;
+    const user = authResult.user;
 
+    const { id } = params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid resume ID' },
+        { success: false, error: 'Invalid CV ID' },
         { status: 400 }
       );
     }
 
     await connectDB();
 
-    const resume = await ResumeModel.findOne({ _id: id, userId: authResult.user.id }).lean();
-
-    if (!resume) {
+    const cv = await CVModel.findOne({ _id: id, userId: user.id }).lean<
+      Record<string, unknown> & { _id: unknown }
+    >();
+    if (!cv) {
       return NextResponse.json(
-        { success: false, error: 'Resume not found' },
+        { success: false, error: 'CV not found' },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      resume: {
-        ...resume,
-        _id: resume._id.toString(),
+      cv: {
+        ...cv,
+        _id: String(cv._id),
       },
     });
   } catch (error) {
-    console.error('Error fetching resume:', error);
+    console.error('Error fetching CV:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch resume' },
+      { success: false, error: 'Failed to fetch CV' },
       { status: 500 }
     );
   }
 }
 
-/**
- * PUT /api/resume/:id
- * Update a resume
- */
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const authResult = await authenticateRequest(request);
-    if (!authResult.authenticated) {
+    if (!authResult.authenticated || !authResult.user) {
       return NextResponse.json(
         { success: false, error: authResult.error || 'Unauthorized' },
         { status: 401 }
       );
     }
+
+    const user = authResult.user;
 
     const { id } = params;
     const updates = await request.json();
 
     if (!ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid resume ID' },
+        { success: false, error: 'Invalid CV ID' },
         { status: 400 }
       );
     }
 
-    await connectDB();
-
-    // Validate and sanitize update payload
     const validation = updateResumeSchema.safeParse(updates);
     if (!validation.success) {
       return handleValidationError(validation.error);
     }
 
-    const allowedUpdates = validation.data;
+    await connectDB();
 
-    const result = await ResumeModel.findOneAndUpdate(
-      { _id: id, userId: authResult.user.id },
-      {
-        $set: {
-          ...allowedUpdates,
-          updatedAt: new Date(),
-        },
-      },
+    const result = await CVModel.findOneAndUpdate(
+      { _id: id, userId: user.id },
+      { $set: { ...validation.data, updatedAt: new Date() } },
       { new: true }
-    ).lean();
+    ).lean<Record<string, unknown> & { _id: unknown }>();
 
     if (!result) {
       return NextResponse.json(
-        { success: false, error: 'Resume not found' },
+        { success: false, error: 'CV not found' },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      resume: {
+      cv: {
         ...result,
-        _id: result._id.toString(),
+        _id: String(result._id),
       },
     });
   } catch (error) {
-    console.error('Error updating resume:', error);
+    console.error('Error updating CV:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update resume' },
+      { success: false, error: 'Failed to update CV' },
       { status: 500 }
     );
   }
 }
 
-/**
- * DELETE /api/resume/:id
- * Delete a resume
- */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const authResult = await authenticateRequest(request);
-    if (!authResult.authenticated) {
+    if (!authResult.authenticated || !authResult.user) {
       return NextResponse.json(
         { success: false, error: authResult.error || 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const { id } = params;
+    const user = authResult.user;
 
+    const { id } = params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid resume ID' },
+        { success: false, error: 'Invalid CV ID' },
         { status: 400 }
       );
     }
 
     await connectDB();
 
-    const result = await ResumeModel.findOneAndDelete({ _id: id, userId: authResult.user.id });
+    const result = await CVModel.findOneAndDelete({ _id: id, userId: user.id });
 
     if (!result) {
       return NextResponse.json(
-        { success: false, error: 'Resume not found' },
+        { success: false, error: 'CV not found' },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Resume deleted successfully',
+      message: 'CV deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting resume:', error);
+    console.error('Error deleting CV:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to delete resume' },
+      { success: false, error: 'Failed to delete CV' },
       { status: 500 }
     );
   }
