@@ -87,35 +87,120 @@ def _format_memory_block(summary: str, recent: list[dict]) -> str:
     return "\n\n".join(parts).strip()
 
 
+def _should_log_llm_context() -> bool:
+    """Opt-in logging for LLM prompt context.
+
+    WARNING: This may include sensitive user data (e.g., resume contents).
+    Enable only for local debugging.
+    """
+
+    from ..config import settings
+
+    return bool(getattr(settings, "edulens_log_llm_context", False))
+
+
+def _log_llm_context(
+    *,
+    label: str,
+    session_id: str,
+    user_id: str,
+    attachments: list[str] | None,
+    context_blocks: list[str],
+    max_blocks: int = 3,
+    max_chars_per_block: int = 600,
+) -> None:
+    """Log a bounded preview of the exact document context sent to the LLM."""
+
+    if not _should_log_llm_context():
+        return
+
+    import hashlib
+
+    safe_attachments = [a for a in (attachments or []) if isinstance(a, str)]
+    total_chars = sum(len(b) for b in context_blocks)
+    digest = hashlib.sha256("\n\n".join(context_blocks).encode("utf-8", errors="ignore")).hexdigest()[:12]
+
+    previews: list[str] = []
+    for idx, blk in enumerate(context_blocks[:max_blocks]):
+        snippet = blk[:max_chars_per_block]
+        if len(blk) > max_chars_per_block:
+            snippet += "…"
+        previews.append(f"--- block {idx + 1} ---\n{snippet}")
+
+    logger.info(
+        "[LLM_CONTEXT] %s session=%s user=%s attachments=%s blocks=%d chars=%d sha=%s\n%s",
+        label,
+        session_id,
+        user_id,
+        safe_attachments,
+        len(context_blocks),
+        total_chars,
+        digest,
+        "\n\n".join(previews) if previews else "(no context blocks)",
+    )
+
+
 def _llm_chat(system_prompt: str, user_prompt: str) -> str:
     """Best-effort chat completion using Gemini or Groq based on settings."""
     from ..config import settings
 
-    if getattr(settings, "google_api_key", None):
-        import google.generativeai as genai
-        genai.configure(api_key=settings.google_api_key)
-        model_name = getattr(settings, "google_model", "gemini-2.5-flash")
-        model = genai.GenerativeModel(model_name)
-        resp = model.generate_content(
-            [
-                {"role": "user", "parts": [system_prompt]},
-                {"role": "user", "parts": [user_prompt]},
-            ]
+    def _is_quota_or_rate_limit_error(error: Exception) -> bool:
+        """Heuristically detect provider quota / rate limit errors.
+
+        We avoid importing provider-specific exception types here.
+        """
+
+        message = str(error).lower()
+        return (
+            "resourceexhausted" in message
+            or "quota" in message
+            or "rate limit" in message
+            or "too many requests" in message
+            or "429" in message
         )
-        return (resp.text or "").strip()
+
+    gemini_error: Exception | None = None
+
+    if getattr(settings, "google_api_key", None):
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=settings.google_api_key)
+            model_name = getattr(settings, "google_model", "gemini-2.5-flash")
+            model = genai.GenerativeModel(model_name)
+            resp = model.generate_content(
+                [
+                    {"role": "user", "parts": [system_prompt]},
+                    {"role": "user", "parts": [user_prompt]},
+                ]
+            )
+            return (resp.text or "").strip()
+        except Exception as e:
+            gemini_error = e
+            # Only fall back automatically for quota/rate-limit style errors.
+            if not (getattr(settings, "groq_api_key", None) and _is_quota_or_rate_limit_error(e)):
+                raise
+            logger.warning(f"Gemini call failed (quota/rate-limit); falling back to Groq: {e}")
 
     if getattr(settings, "groq_api_key", None):
-        from groq import Groq
-        client = Groq(api_key=settings.groq_api_key)
-        chat = client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.2,
-        )
-        return (chat.choices[0].message.content or "").strip()
+        try:
+            from groq import Groq
+            client = Groq(api_key=settings.groq_api_key)
+            chat = client.chat.completions.create(
+                model="llama-3.1-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,
+            )
+            return (chat.choices[0].message.content or "").strip()
+        except Exception as e:
+            if gemini_error is not None:
+                raise RuntimeError(
+                    "Both Gemini and Groq failed. "
+                    f"Gemini error: {gemini_error}. Groq error: {e}"
+                )
+            raise
 
     raise RuntimeError("No LLM API key configured (Gemini/Groq)")
 
@@ -407,6 +492,9 @@ async def _handle_resume_cv_builder(
             "experience": [],
             "education": [],
             "skills": [],
+            "projects": [],
+            "certifications": [],
+            "languages": [],
         }
 
     def _merge_drafts(base: dict, incoming: dict) -> dict:
@@ -541,7 +629,8 @@ async def _handle_resume_cv_builder(
     try:
         system_prompt = (
             "You extract resume/CV information from a conversation. "
-            "Only extract facts explicitly stated by the user. Do NOT guess or invent. "
+            "Extract as much as possible (including items scattered across messages). "
+            "Only extract facts explicitly stated in the conversation; do NOT guess or invent. "
             "Return ONLY valid JSON (no markdown, no commentary)."
         )
         user_prompt = (
@@ -550,15 +639,21 @@ async def _handle_resume_cv_builder(
             "{\n"
             "  \"extracted\": {\n"
             "    \"title\": string,\n"
-            "    \"personalInfo\": {\"fullName\": string, \"email\": string, \"phone\": string, \"location\": {\"city\": string, \"state\": string, \"country\": string}, \"linkedin\": string, \"github\": string, \"portfolio\": string},\n"
+            "    \"personalInfo\": {\"fullName\": string, \"email\": string, \"phone\": string, \"location\": {\"city\": string, \"state\": string, \"country\": string}, \"linkedin\": string, \"github\": string, \"portfolio\": string, \"website\": string},\n"
             "    \"summary\": string,\n"
             "    \"experience\": [{\"company\": string, \"position\": string, \"location\": string, \"startDate\": string, \"endDate\": string, \"current\": boolean, \"bullets\": [string]}],\n"
-            "    \"education\": [{\"institution\": string, \"degree\": string, \"field\": string, \"location\": string, \"startDate\": string, \"endDate\": string, \"current\": boolean}],\n"
-            "    \"skills\": [{\"name\": string, \"category\": string}]\n"
+            "    \"education\": [{\"institution\": string, \"degree\": string, \"field\": string, \"location\": string, \"startDate\": string, \"endDate\": string, \"current\": boolean, \"gpa\": string, \"coursework\": [string], \"honors\": [string]}],\n"
+            "    \"skills\": [{\"name\": string, \"category\": string}],\n"
+            "    \"projects\": [{\"name\": string, \"description\": string, \"technologies\": [string], \"bullets\": [string], \"url\": string, \"github\": string}],\n"
+            "    \"certifications\": [{\"name\": string, \"issuer\": string, \"date\": string, \"expiryDate\": string, \"credentialId\": string, \"url\": string}],\n"
+            "    \"languages\": [{\"name\": string, \"proficiency\": string}]\n"
             "  },\n"
             "  \"missing\": [string]\n"
             "}\n\n"
-            "Rules: fill unknown fields with empty strings/empty arrays; missing should include key things not present (e.g. fullName, education, experience, skills).\n\n"
+            "Rules:\n"
+            "- Fill unknown fields with empty strings/empty arrays.\n"
+            "- Do not include placeholders like 'N/A' or 'unknown' in extracted fields (use empty strings instead).\n"
+            "- missing should include key things not present (e.g. fullName, education, experience, skills).\n\n"
             f"Conversation:\n{_conversation_text()}"
         )
         raw = _llm_chat(system_prompt, user_prompt)
@@ -574,6 +669,8 @@ async def _handle_resume_cv_builder(
         logger.warning(f"Resume/CV conversation extraction failed: {e}")
         missing_fields = ["fullName", "education", "experience", "skills"]
 
+    # Progress based on what the user has shared *in chat* so far.
+    # NOTE: when generating from attachments, we will recompute progress from the final draft.
     progress_payload = _calc_progress(extracted_from_chat)
 
     if not req.generate_draft:
@@ -659,26 +756,48 @@ async def _handle_resume_cv_builder(
     except Exception as e:
         logger.warning(f"Resume/CV draft context build failed: {e}")
 
+    _log_llm_context(
+        label=f"resume_cv_builder:{doc_type}",
+        session_id=session_id,
+        user_id=user_id,
+        attachments=attachments,
+        context_blocks=context_blocks,
+    )
+
     # Conversation context is always available; attachments are optional.
     context = "\n\n".join([_conversation_text()] + context_blocks)
 
     # Ask the LLM to produce a structured draft JSON.
     system_prompt = (
         "You are a resume/CV drafting assistant. Convert the provided context (conversation + optional attachments) into a clean structured draft. "
-        "Only use facts stated in the context; do NOT invent. Return ONLY valid JSON (no markdown, no commentary)."
+        "Maximize recall: extract every relevant resume/CV detail you can find, even if it appears only once or is scattered. "
+        "Only use facts stated in the context; do NOT invent or guess. "
+        "If a detail is uncertain or not explicitly stated, leave it empty. "
+        "Write strong but truthful bullet points: keep user-provided metrics; do not fabricate numbers. "
+        "Return ONLY valid JSON (no markdown, no commentary)."
     )
     user_prompt = (
-        "Create a JSON object with this schema:\n"
+        "Create a JSON object with this schema (all fields required; use empty strings/arrays when unknown):\n"
         "{\n"
         "  \"version\": 1,\n"
         "  \"title\": string,\n"
-        "  \"personalInfo\": {\"fullName\": string, \"email\": string, \"phone\": string, \"location\": {\"city\": string, \"state\": string, \"country\": string}, \"linkedin\": string, \"github\": string, \"portfolio\": string},\n"
+        "  \"personalInfo\": {\"fullName\": string, \"email\": string, \"phone\": string, \"location\": {\"city\": string, \"state\": string, \"country\": string}, \"linkedin\": string, \"github\": string, \"portfolio\": string, \"website\": string},\n"
         "  \"summary\": string,\n"
         "  \"experience\": [{\"company\": string, \"position\": string, \"location\": string, \"startDate\": string, \"endDate\": string, \"current\": boolean, \"bullets\": [string]}],\n"
-        "  \"education\": [{\"institution\": string, \"degree\": string, \"field\": string, \"location\": string, \"startDate\": string, \"endDate\": string, \"current\": boolean}],\n"
-        "  \"skills\": [{\"name\": string, \"category\": string}]\n"
+        "  \"education\": [{\"institution\": string, \"degree\": string, \"field\": string, \"location\": string, \"startDate\": string, \"endDate\": string, \"current\": boolean, \"gpa\": string, \"coursework\": [string], \"honors\": [string]}],\n"
+        "  \"skills\": [{\"name\": string, \"category\": string}],\n"
+        "  \"projects\": [{\"name\": string, \"description\": string, \"technologies\": [string], \"bullets\": [string], \"url\": string, \"github\": string}],\n"
+        "  \"certifications\": [{\"name\": string, \"issuer\": string, \"date\": string, \"expiryDate\": string, \"credentialId\": string, \"url\": string}],\n"
+        "  \"languages\": [{\"name\": string, \"proficiency\": string}]\n"
         "}\n\n"
-        "Rules: fill unknown fields with empty strings/empty arrays; do not invent facts not present in the text.\n\n"
+        "Rules:\n"
+        "- Do not invent facts. If not present, leave empty.\n"
+        "- Prefer concrete details: dates, locations, tools/technologies, titles, organizations, links.\n"
+        "- Experience bullets: 2-6 per role, action-led, include metrics only if present in context.\n"
+        "- Skills: include technologies/tools/languages explicitly mentioned in context; categorize as technical/soft/tool/framework/language/other.\n"
+        "- Projects: include name + what it does + technologies + links if present.\n"
+        "- Certifications: include issuer/date/credentialId/url when present.\n"
+        "- Languages: proficiency must be one of native|fluent|professional|intermediate|basic (else use empty string).\n\n"
         "Use conversation facts first; supplement from attachments if present.\n\n"
         f"Context:\n{context}"
     )
@@ -703,6 +822,7 @@ async def _handle_resume_cv_builder(
 
         if has_any:
             fallback_draft = _merge_drafts(_blank_draft(), extracted_from_chat)
+            progress_from_draft = _calc_progress(fallback_draft)
             return ChatMessageResponse(
                 session_id=session_id,
                 answer=(
@@ -712,7 +832,7 @@ async def _handle_resume_cv_builder(
                 sources=sources or None,
                 agents_involved=["DocumentBuilderAgent"],
                 document_draft=fallback_draft,
-                progress=progress_payload,
+                progress=progress_from_draft,
                 action="generate_draft",
             )
 
@@ -745,6 +865,9 @@ async def _handle_resume_cv_builder(
             action="collect_info",
         )
 
+    # Recompute progress from the generated draft (includes attachment-derived facts).
+    progress_from_draft = _calc_progress(draft_obj if isinstance(draft_obj, dict) else extracted_from_chat)
+
     return ChatMessageResponse(
         session_id=session_id,
         answer=(
@@ -755,7 +878,7 @@ async def _handle_resume_cv_builder(
         sources=sources or None,
         agents_involved=["DocumentBuilderAgent"],
         document_draft=draft_obj,
-        progress=progress_payload,
+        progress=progress_from_draft,
         action="generate_draft",
     )
 
@@ -936,10 +1059,17 @@ async def _handle_document_analysis(
                     SourceItem(id=r.chunk_id, title=r.filename or r.document_id, url=None, snippet=r.text[:180])
                 )
 
+        _log_llm_context(
+            label="document_analysis",
+            session_id=session_id,
+            user_id=user_id,
+            attachments=attachments,
+            context_blocks=context_blocks,
+        )
+
         context = "\n\n".join(context_blocks)
 
         # Generate answer via Gemini or Groq
-        from ..config import settings
         system_prompt = (
             "You are a helpful document analyst. Answer the user question using the provided document context. "
             "You may use the conversation summary and recent turns for intent/preferences, "
@@ -954,30 +1084,7 @@ async def _handle_document_analysis(
 
         answer: str
         try:
-            if getattr(settings, "google_api_key", None):
-                import google.generativeai as genai
-                genai.configure(api_key=settings.google_api_key)
-                model_name = getattr(settings, "google_model", "gemini-2.5-flash")
-                model = genai.GenerativeModel(model_name)
-                resp = model.generate_content([
-                    {"role": "user", "parts": [system_prompt]},
-                    {"role": "user", "parts": [user_prompt]},
-                ])
-                answer = resp.text or ""
-            elif getattr(settings, "groq_api_key", None):
-                from groq import Groq
-                client = Groq(api_key=settings.groq_api_key)
-                chat = client.chat.completions.create(
-                    model="llama-3.1-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.2,
-                )
-                answer = chat.choices[0].message.content
-            else:
-                raise RuntimeError("No LLM API key configured (Gemini/Groq)")
+            answer = _llm_chat(system_prompt, user_prompt)
         except Exception as e:
             logger.warning(f"LLM call failed: {e}")
             preview = "\n\n".join([blk[:500] for blk in context_blocks[:3]])

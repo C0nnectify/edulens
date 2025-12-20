@@ -14,6 +14,8 @@ export default function TemplatesPage() {
   const router = useRouter();
   const templateCategories = getTemplateCategories();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const allTemplates = templateCategories.flatMap(cat =>
     cat.templates.map(t => ({ ...t, category: cat.category }))
@@ -25,9 +27,39 @@ export default function TemplatesPage() {
 
   const categories = ['all', ...templateCategories.map(c => c.category)];
 
-  const handleSelectTemplate = (templateId: string) => {
-    // Navigate to editor with selected template
-    router.push(`/dashboard/document-builder/resume/editor-v2?template=${templateId}`);
+  const handleSelectTemplate = async (templateId: string) => {
+    // Create a persisted resume using the selected template, then open it in the editor.
+    // If creation fails (e.g., auth), fall back to opening the editor with template param.
+    setCreateError(null);
+    setCreatingTemplateId(templateId);
+    try {
+      const response = await fetch('/api/resume/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Untitled Resume',
+          template: templateId,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success) {
+        const msg = (data && (data.error || data.message)) || 'Failed to create resume';
+        throw new Error(msg);
+      }
+
+      const createdId = data?.resume?._id || data?.resume?.id;
+      if (createdId) {
+        router.push(`/dashboard/document-builder/resume/editor-v2?id=${encodeURIComponent(String(createdId))}`);
+      } else {
+        router.push(`/dashboard/document-builder/resume/editor-v2?template=${encodeURIComponent(templateId)}`);
+      }
+    } catch (e: any) {
+      setCreateError(e?.message || 'Failed to create resume');
+      router.push(`/dashboard/document-builder/resume/editor-v2?template=${encodeURIComponent(templateId)}`);
+    } finally {
+      setCreatingTemplateId(null);
+    }
   };
 
   return (
@@ -89,6 +121,11 @@ export default function TemplatesPage() {
 
         {/* Template Gallery */}
         <div className="container mx-auto px-4 pb-20">
+          {createError && (
+            <div className="max-w-3xl mx-auto mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+              {createError}
+            </div>
+          )}
           <div className="mb-8 text-center">
             <p className="text-gray-600">
               Showing {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
@@ -123,8 +160,9 @@ export default function TemplatesPage() {
                         size="lg"
                         className="bg-white text-blue-600 hover:bg-blue-50"
                         onClick={() => handleSelectTemplate(template.id)}
+                        disabled={creatingTemplateId === template.id}
                       >
-                        Use This Template
+                        {creatingTemplateId === template.id ? 'Creating…' : 'Use This Template'}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>
@@ -182,9 +220,10 @@ export default function TemplatesPage() {
                     <Button
                       className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
                       onClick={() => handleSelectTemplate(template.id)}
+                      disabled={creatingTemplateId === template.id}
                     >
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Create Resume
+                      {creatingTemplateId === template.id ? 'Creating…' : 'Create Resume'}
                     </Button>
                   </CardContent>
                 </Card>

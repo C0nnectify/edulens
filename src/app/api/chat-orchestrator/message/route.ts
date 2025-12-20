@@ -144,6 +144,22 @@ export async function POST(req: NextRequest) {
           content: answer,
           createdAt: now,
           sources: Array.isArray(data?.sources) ? data.sources : undefined,
+          agentsInvolved: Array.isArray(data?.agents_involved) ? data.agents_involved : undefined,
+          documentDraft:
+            data?.document_draft && typeof data.document_draft === "object"
+              ? (data.document_draft as Record<string, unknown>)
+              : undefined,
+          progress:
+            data?.progress && typeof data.progress === "object"
+              ? (data.progress as {
+                  collected_fields: string[];
+                  missing_fields: string[];
+                  percentage: number;
+                  ready_for_generation?: boolean;
+                })
+              : undefined,
+          action: typeof data?.action === "string" ? data.action : undefined,
+          documentType: typeof documentType === "string" ? documentType : null,
         }),
         sessions.updateOne(
           { userId, sessionId: resolvedSessionId },

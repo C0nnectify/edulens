@@ -14,11 +14,13 @@ import { getTemplatePresetById } from '@/lib/resume/designPresets';
 interface ImprovedResumePreviewProps {
   resume: Resume;
   zoom?: number;
+  onDownload?: () => void;
 }
 
 export default function ImprovedResumePreview({
   resume,
   zoom: initialZoom = 100,
+  onDownload,
 }: ImprovedResumePreviewProps) {
   const [zoom, setZoom] = useState(initialZoom);
 
@@ -76,7 +78,7 @@ export default function ImprovedResumePreview({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Toolbar */}
       <div className="p-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -94,26 +96,28 @@ export default function ImprovedResumePreview({
           <Button variant="ghost" size="sm">
             <Maximize2 className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={onDownload} disabled={!onDownload}>
             <Download className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
       {/* Preview Content */}
-      <ScrollArea className="flex-1 bg-slate-100 dark:bg-slate-950">
+      <ScrollArea className="flex-1 min-h-0 bg-slate-100 dark:bg-slate-950">
         <div className="p-6 flex justify-center">
           <motion.div
+            data-resume-preview
             className="bg-white shadow-lg"
             style={{
               width: '8.5in',
               minHeight: '11in',
-              transform: `scale(${zoom / 100})`,
-              transformOrigin: 'top center',
+              // Use CSS zoom so the scroll height matches the visual size.
+              // (transform: scale(...) does not affect layout/scroll height.)
+              zoom: zoom / 100,
               backgroundColor: colors.background,
               color: colors.text,
               fontFamily,
-            }}
+            } as React.CSSProperties}
           >
             <div className={contentClassName}>
               {/* Header */}

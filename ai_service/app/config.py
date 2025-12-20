@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     log_file: str = Field(default="logs/ai_service.log", env="LOG_FILE")
 
+    # Debugging / Diagnostics
+    # WARNING: when enabled, the service may log snippets of document text
+    # that are sent to the LLM (potentially sensitive user data).
+    edulens_log_llm_context: bool = Field(default=False, env="EDULENS_LOG_LLM_CONTEXT")
+
     # GradCafe Collection Configuration
     gradcafe_collection_enabled: bool = Field(default=True, env="GRADCAFE_COLLECTION_ENABLED")
     gradcafe_daily_collection_time: str = Field(default="03:00", env="GRADCAFE_DAILY_COLLECTION_TIME")

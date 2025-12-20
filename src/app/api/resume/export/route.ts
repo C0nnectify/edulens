@@ -1,5 +1,7 @@
 // POST /api/resume/export - Generate PDF/DOCX export of resume
 
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongoose';
 import { ResumeModel } from '@/lib/db/models/Resume';
@@ -13,6 +15,8 @@ import {
 } from '@/lib/api-utils';
 import { Resume } from '@/types/resume';
 import { resumeApiToUi } from '@/lib/resume/mappers';
+
+type PdfMakeDocumentDefinition = Record<string, unknown>;
 
 // Format resume as plain text
 function formatAsText(resume: Resume): string {
@@ -149,15 +153,182 @@ function formatAsText(resume: Resume): string {
   return lines.join('\n');
 }
 
-// Simulate PDF generation (in production, use a library like puppeteer or pdfkit)
+function buildPdfDefinition(resume: Resume): PdfMakeDocumentDefinition {
+  const name =
+    resume.personalInfo.fullName ||
+    `${resume.personalInfo.firstName || ''} ${resume.personalInfo.lastName || ''}`.trim() ||
+    'Resume';
+
+  const contactParts: string[] = [];
+  if (resume.personalInfo.email) contactParts.push(resume.personalInfo.email);
+  if (resume.personalInfo.phone) contactParts.push(resume.personalInfo.phone);
+  if (resume.personalInfo.location) {
+    const loc = resume.personalInfo.location;
+    const locText = [loc.city, loc.state, loc.country].filter(Boolean).join(', ');
+    if (locText) contactParts.push(locText);
+  }
+  if (resume.personalInfo.linkedin) contactParts.push(`LinkedIn: ${resume.personalInfo.linkedin}`);
+  if (resume.personalInfo.github) contactParts.push(`GitHub: ${resume.personalInfo.github}`);
+  if (resume.personalInfo.portfolio) contactParts.push(`Portfolio: ${resume.personalInfo.portfolio}`);
+
+  const content: any[] = [];
+
+  content.push({ text: name, style: 'name' });
+  if (contactParts.length > 0) {
+    content.push({ text: contactParts.join('  •  '), style: 'contact' });
+  }
+
+  if (resume.summary) {
+    content.push({ text: 'Summary', style: 'sectionHeader' });
+    content.push({ text: resume.summary, style: 'paragraph' });
+  }
+
+  if (resume.experience && resume.experience.length > 0) {
+    content.push({ text: 'Experience', style: 'sectionHeader' });
+    resume.experience.forEach((exp) => {
+      content.push({
+        columns: [
+          {
+            width: '*',
+            text: `${exp.position}${exp.company ? `, ${exp.company}` : ''}`,
+            style: 'itemTitle',
+          },
+          {
+            width: 'auto',
+            text: `${exp.startDate || ''} - ${exp.current ? 'Present' : exp.endDate || 'Present'}`.trim(),
+            style: 'itemMeta',
+          },
+        ],
+        columnGap: 12,
+      });
+      if (exp.location) content.push({ text: exp.location, style: 'itemMeta' });
+      if (exp.description) content.push({ text: exp.description, style: 'paragraph' });
+      if (exp.bullets && exp.bullets.length > 0) {
+        content.push({
+          ul: exp.bullets.filter(Boolean),
+          style: 'bullets',
+        });
+      }
+      content.push({ text: '', margin: [0, 4, 0, 0] });
+    });
+  }
+
+  if (resume.education && resume.education.length > 0) {
+    content.push({ text: 'Education', style: 'sectionHeader' });
+    resume.education.forEach((edu) => {
+      const degreeLine = [edu.degree, edu.field ? `in ${edu.field}` : ''].filter(Boolean).join(' ');
+      content.push({
+        columns: [
+          { width: '*', text: degreeLine || edu.institution, style: 'itemTitle' },
+          {
+            width: 'auto',
+            text: `${edu.startDate || ''} - ${edu.current ? 'Present' : edu.endDate || ''}`.trim(),
+            style: 'itemMeta',
+          },
+        ],
+        columnGap: 12,
+      });
+      if (edu.institution) content.push({ text: edu.institution, style: 'paragraph' });
+      if (edu.gpa) content.push({ text: `GPA: ${edu.gpa}`, style: 'paragraph' });
+      if (edu.honors && edu.honors.length > 0) {
+        content.push({ text: `Honors: ${edu.honors.join(', ')}`, style: 'paragraph' });
+      }
+      content.push({ text: '', margin: [0, 4, 0, 0] });
+    });
+  }
+
+  if (resume.skills && resume.skills.length > 0) {
+    content.push({ text: 'Skills', style: 'sectionHeader' });
+    const skillsByCategory: Record<string, string[]> = {};
+    resume.skills.forEach((skill) => {
+      const category = skill.category || 'Skills';
+      if (!skillsByCategory[category]) skillsByCategory[category] = [];
+      skillsByCategory[category].push(skill.name);
+    });
+    Object.entries(skillsByCategory).forEach(([category, skills]) => {
+      content.push({
+        text: [{ text: `${category}: `, bold: true }, skills.join(', ')],
+        style: 'paragraph',
+      });
+    });
+  }
+
+  if (resume.projects && resume.projects.length > 0) {
+    content.push({ text: 'Projects', style: 'sectionHeader' });
+    resume.projects.forEach((project) => {
+      content.push({ text: project.name, style: 'itemTitle' });
+      if (project.role) content.push({ text: project.role, style: 'itemMeta' });
+      if (project.description) content.push({ text: project.description, style: 'paragraph' });
+      if (project.technologies && project.technologies.length > 0) {
+        content.push({ text: `Technologies: ${project.technologies.join(', ')}`, style: 'paragraph' });
+      }
+      if (project.url) content.push({ text: `URL: ${project.url}`, style: 'paragraph' });
+      if (project.github) content.push({ text: `GitHub: ${project.github}`, style: 'paragraph' });
+      content.push({ text: '', margin: [0, 4, 0, 0] });
+    });
+  }
+
+  if (resume.certifications && resume.certifications.length > 0) {
+    content.push({ text: 'Certifications', style: 'sectionHeader' });
+    resume.certifications.forEach((cert) => {
+      const line = [cert.name, cert.issuer ? `— ${cert.issuer}` : '', cert.date ? `(${cert.date})` : '']
+        .filter(Boolean)
+        .join(' ');
+      content.push({ text: line, style: 'paragraph' });
+    });
+  }
+
+  if (resume.languages && resume.languages.length > 0) {
+    content.push({ text: 'Languages', style: 'sectionHeader' });
+    content.push({
+      text: resume.languages.map((l) => `${l.name}: ${l.proficiency}`).join('  •  '),
+      style: 'paragraph',
+    });
+  }
+
+  return {
+    pageSize: 'LETTER',
+    pageMargins: [48, 48, 48, 48],
+    content,
+    defaultStyle: {
+      font: 'Roboto',
+      fontSize: 11,
+      lineHeight: 1.15,
+    },
+    styles: {
+      name: { fontSize: 18, bold: true, margin: [0, 0, 0, 6] },
+      contact: { fontSize: 10, color: '#555555', margin: [0, 0, 0, 14] },
+      sectionHeader: { fontSize: 12, bold: true, margin: [0, 10, 0, 6] },
+      itemTitle: { fontSize: 11, bold: true, margin: [0, 0, 0, 2] },
+      itemMeta: { fontSize: 10, color: '#666666', margin: [0, 0, 0, 2] },
+      paragraph: { margin: [0, 0, 0, 6] },
+      bullets: { margin: [12, 0, 0, 8] },
+    },
+  };
+}
+
 async function generatePDF(
   resume: Resume,
   _template: string,
   _options: Record<string, unknown> | undefined
 ): Promise<Buffer> {
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-  const textContent = formatAsText(resume);
-  return Buffer.from(textContent, 'utf-8');
+  const pdfMakeMod = await import('pdfmake/build/pdfmake.js');
+  const pdfFonts = await import('pdfmake/build/vfs_fonts.js');
+  const pdfMake: any = (pdfMakeMod as any).default || pdfMakeMod;
+  const vfs = ((pdfFonts as any).default && (pdfFonts as any).default.vfs) || (pdfFonts as any).vfs;
+  pdfMake.vfs = vfs;
+
+  const docDefinition = buildPdfDefinition(resume);
+
+  return await new Promise<Buffer>((resolve, reject) => {
+    try {
+      pdfMake.createPdf(docDefinition).getBuffer((buffer: Uint8Array) => {
+        resolve(Buffer.from(buffer));
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
 }
 
 // Simulate DOCX generation (in production, use docx library)

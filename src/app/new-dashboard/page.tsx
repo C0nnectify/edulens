@@ -1,9 +1,29 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Upload, Mic, Sparkles, FileText, Activity, ListChecks, Search, Paperclip, ChevronRight, Plus, Menu, MessageSquare, Clock, X, Zap, ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Check, AlertCircle, Loader2, File, Image, FileSpreadsheet, type LucideIcon } from "lucide-react";
-import { sendMessage, uploadFile, getUserFiles, listSessions, getHistory, DocumentType, FileAttachment } from "@/lib/api/chatOrchestrator";
+import { Upload, Mic, Sparkles, FileText, Activity, ListChecks, Search, Paperclip, ChevronRight, Plus, Menu, MessageSquare, Clock, X, Zap, ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Check, AlertCircle, Loader2, File, Image, FileSpreadsheet, Trash2, type LucideIcon } from "lucide-react";
+import { sendMessage, uploadFile, getUserFiles, listSessions, getHistory, renameSession, deleteSession, DocumentType, FileAttachment } from "@/lib/api/chatOrchestrator";
 import { MarkdownContent } from "@/components/chat/MarkdownContent";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type FeatureKey = "document_builder" | "monitoring_agent" | "future_prediction" | "present_analyzer" | null;
 
@@ -83,6 +103,7 @@ const documentTypeOptions: Array<{ key: DocumentType | 'analyze'; label: string;
     text: "text-pink-700",
   },
 ];
+
 
 const agentTools: Array<{ key: Exclude<FeatureKey, null>; label: string; description: string; icon: LucideIcon; color: string; bg: string }> = [
   {
@@ -176,6 +197,14 @@ export default function NewDashboardPage() {
   const [previousFiles, setPreviousFiles] = useState<FileAttachment[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
+
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [chatActionTarget, setChatActionTarget] = useState<RecentChat | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const documentTypeDropdownRef = useRef<HTMLDivElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
@@ -196,6 +225,53 @@ export default function NewDashboardPage() {
       console.error("Failed to load recent sessions", e);
     }
   }, []);
+
+  const openRename = useCallback((chat: RecentChat) => {
+    setChatActionTarget(chat);
+    setRenameTitle((chat.title || "").trim());
+    setRenameDialogOpen(true);
+  }, []);
+
+  const openDelete = useCallback((chat: RecentChat) => {
+    setChatActionTarget(chat);
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const submitRename = useCallback(async () => {
+    const target = chatActionTarget;
+    const title = renameTitle.trim();
+    if (!target || !title) return;
+    setIsRenaming(true);
+    try {
+      await renameSession(target.id, title);
+      setRenameDialogOpen(false);
+      await loadRecentChats();
+    } catch (err) {
+      console.error("Failed to rename session", err);
+    } finally {
+      setIsRenaming(false);
+    }
+  }, [chatActionTarget, renameTitle, loadRecentChats]);
+
+  const confirmDelete = useCallback(async () => {
+    const target = chatActionTarget;
+    if (!target) return;
+    setIsDeleting(true);
+    try {
+      await deleteSession(target.id);
+      // If deleting the currently opened chat, reset UI.
+      if (sessionId === target.id) {
+        setMessages([]);
+        setSessionId(null);
+      }
+      setDeleteDialogOpen(false);
+      await loadRecentChats();
+    } catch (err) {
+      console.error("Failed to delete session", err);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [chatActionTarget, sessionId, loadRecentChats]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -247,8 +323,8 @@ export default function NewDashboardPage() {
       const docTypeLabels: Record<string, string> = {
         sop: "Tell me about your background, target university, and career goals for your SOP…",
         lor: "Share details about the student/colleague you're recommending…",
-        cv: "Let's build your academic CV. Tell me about your education and research…",
-        resume: "Let's create your resume. What position are you targeting?",
+        cv: "Attach your CV/resume PDF (or paste details). Include: target role, education, research/projects, experience, skills, publications (if any). Then type: Generate CV",
+        resume: "Attach your resume PDF (or paste details). Include: target role, experience + impact bullets, projects, skills, education, certifications. Then type: Generate Resume",
         analyze: "Upload documents to analyze and get insights…",
       };
       return docTypeLabels[selectedDocumentType as string];
@@ -393,19 +469,64 @@ export default function NewDashboardPage() {
     const normalizedCmd = normalizeCmd(text);
     const normalizedLastLine = normalizeCmd(lastLine);
 
+    const resumeDraftTriggers = ["generate resume", "make resume", "create resume", "build resume"];
+    const cvDraftTriggers = ["generate cv", "make cv", "create cv", "build cv"];
+
+    const containsAnyTrigger = (haystack: string, triggers: string[]) =>
+      triggers.some((t) => haystack.includes(t));
+
     const wantsGenerateDraft =
       selectedTool === "document_builder" &&
       (selectedDocumentType === "resume"
-        ? normalizedCmd === "generate resume" || normalizedLastLine === "generate resume"
+        ? containsAnyTrigger(normalizedCmd, resumeDraftTriggers) || containsAnyTrigger(normalizedLastLine, resumeDraftTriggers)
         : selectedDocumentType === "cv"
-          ? normalizedCmd === "generate cv" || normalizedLastLine === "generate cv"
+          ? containsAnyTrigger(normalizedCmd, cvDraftTriggers) || containsAnyTrigger(normalizedLastLine, cvDraftTriggers)
           : false);
 
+    const stripDraftTriggers = (raw: string) => {
+      const triggers = selectedDocumentType === "resume" ? resumeDraftTriggers : selectedDocumentType === "cv" ? cvDraftTriggers : [];
+      if (triggers.length === 0) return raw;
+      let out = raw;
+      for (const t of triggers) {
+        // Remove trigger phrases even when embedded in other text.
+        out = out.replace(new RegExp(`\\b${t.replace(/[-/\\^$*+?.()|[\\]{}]/g, "\\$&")}\\b`, "ig"), "");
+      }
+      return out.replace(/\s+/g, " ").trim();
+    };
+
     // If user ended their message with the command, strip it from the backend message.
-    const messageForBackend = wantsGenerateDraft && (normalizedLastLine === "generate resume" || normalizedLastLine === "generate cv")
-      ? lines.slice(0, -1).join("\n").trim() || lastLine
-      : text;
-    const currentAttachments = uploadedFiles.filter(f => selectedFileIds.includes(f.id));
+    let messageForBackend = text;
+    if (wantsGenerateDraft) {
+      // Prefer stripping from the whole message so button labels like
+      // "Using this resume PDF Generate Resume" still work.
+      messageForBackend = stripDraftTriggers(text);
+      if (!messageForBackend) {
+        messageForBackend = selectedDocumentType === "cv"
+          ? "Please generate a structured CV draft from the selected attachments."
+          : "Please generate a structured resume draft from the selected attachments.";
+      }
+    }
+
+    // Attachments shown under the user's message should include both:
+    // - freshly uploaded files (uploadedFiles)
+    // - previously uploaded files (previousFiles)
+    // The backend already receives IDs via attachmentIds; this is purely for UI display.
+    const previousAsUploaded: UploadedFile[] = previousFiles
+      .filter((f) => selectedFileIds.includes(f.id))
+      .map((f) => {
+        const mappedStatus: UploadedFile["status"] =
+          f.status === "failed" ? "error" : f.status === "completed" ? "ready" : "processing";
+        return {
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          status: mappedStatus,
+        };
+      });
+
+    const uploadedSelected = uploadedFiles.filter((f) => selectedFileIds.includes(f.id));
+    const currentAttachments = [...uploadedSelected, ...previousAsUploaded.filter((pf) => !uploadedSelected.some((uf) => uf.id === pf.id))];
     
     setInput("");
     // Collapse the auto-growing textarea after send.
@@ -475,9 +596,10 @@ export default function NewDashboardPage() {
 
       // Refresh chat sessions so the sidebar shows the latest conversation.
       loadRecentChats();
-      
-      // Clear selected files after sending
-      setSelectedFileIds([]);
+
+      // Keep selected files sticky across turns.
+      // The chat-orchestrator supports sticky attachment context; clearing here
+      // would unintentionally drop document context on the next message.
       
     } catch (err) {
       console.error(err);
@@ -485,7 +607,7 @@ export default function NewDashboardPage() {
     } finally {
       setIsSending(false);
     }
-  }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles, loadRecentChats]);
+  }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles, previousFiles, loadRecentChats]);
 
   return (
     <div className="flex h-screen bg-gray-50/50 font-sans text-gray-900 selection:bg-blue-100 selection:text-blue-900">
@@ -527,17 +649,45 @@ export default function NewDashboardPage() {
           </div>
           <div className="space-y-1.5">
             {recentChats.map((chat, index) => (
-              <button
+              <div
                 key={`${chat.id}-${index}`}
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   (async () => {
                     try {
                       const history = await getHistory(chat.id);
-                      const mapped: ChatMessage[] = history.messages.map((m, idx) => ({
-                        id: `${chat.id}-${idx}`,
-                        role: m.role === "user" ? "user" : "ai",
-                        content: m.content,
-                      }));
+                      const mapped: ChatMessage[] = history.messages.map((m, idx) => {
+                        const role = m.role === "user" ? "user" : "ai";
+
+                        // Recreate a draftKey on-demand so the editor CTA works even after reload.
+                        let draftKey: string | undefined;
+                        const docType = (m.documentType ?? history.document_type ?? chat.documentType ?? null) as DocumentType | null;
+                        if (typeof window !== "undefined" && role === "ai" && m.documentDraft && docType) {
+                          try {
+                            draftKey = `docbuilder-draft-${chat.id}-${idx}-${Date.now()}`;
+                            window.localStorage.setItem(
+                              draftKey,
+                              JSON.stringify({ documentType: docType, documentDraft: m.documentDraft })
+                            );
+                          } catch (e) {
+                            console.error("Failed to restore draft to localStorage", e);
+                          }
+                        }
+
+                        return {
+                          id: `${chat.id}-${idx}`,
+                          role,
+                          content: m.content,
+                          sources: role === "ai" ? (m.sources ?? undefined) : undefined,
+                          agentsInvolved: role === "ai" ? (m.agentsInvolved ?? undefined) : undefined,
+                          progress: role === "ai" && m.progress ? (m.progress as any) : undefined,
+                          documentDraft: role === "ai" ? (m.documentDraft ?? undefined) : undefined,
+                          action: role === "ai" ? (m.action ?? undefined) : undefined,
+                          documentType: role === "ai" ? docType : null,
+                          draftKey,
+                        } as ChatMessage;
+                      });
                       setMessages(mapped);
                       setSessionId(chat.id);
                       const effectiveDocType =
@@ -563,6 +713,12 @@ export default function NewDashboardPage() {
                       console.error("Failed to load history", e);
                     }
                   })();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    (e.currentTarget as HTMLDivElement).click();
+                  }
                 }}
                 className="w-full group relative"
               >
@@ -595,9 +751,39 @@ export default function NewDashboardPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Hover actions: Rename / Delete */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          openRename(chat);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-gray-100/80 text-gray-500 hover:text-gray-700"
+                        aria-label="Rename chat"
+                        title="Rename"
+                      >
+                        <FileEdit size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          openDelete(chat);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-gray-100/80 text-gray-500 hover:text-gray-700"
+                        aria-label="Delete chat"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </div>
@@ -1211,6 +1397,84 @@ export default function NewDashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Rename chat dialog */}
+        <Dialog
+          open={renameDialogOpen}
+          onOpenChange={(open) => {
+            if (isRenaming) return;
+            setRenameDialogOpen(open);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Rename chat</DialogTitle>
+              <DialogDescription>Update the title shown in your chat history.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Input
+                value={renameTitle}
+                onChange={(e) => setRenameTitle(e.target.value)}
+                placeholder="Chat title"
+                maxLength={120}
+                disabled={isRenaming}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void submitRename();
+                  }
+                }}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRenameDialogOpen(false)}
+                disabled={isRenaming}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void submitRename()}
+                disabled={isRenaming || !renameTitle.trim() || !chatActionTarget}
+              >
+                {isRenaming ? "Saving…" : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete chat dialog */}
+        <AlertDialog
+          open={deleteDialogOpen}
+          onOpenChange={(open) => {
+            if (isDeleting) return;
+            setDeleteDialogOpen(open);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove the chat and all its messages.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  void confirmDelete();
+                }}
+                className={isDeleting ? "pointer-events-none opacity-70" : undefined}
+              >
+                {isDeleting ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

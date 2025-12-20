@@ -83,8 +83,39 @@ export async function listSessions(): Promise<{
   return res.json();
 }
 
+export async function renameSession(sessionId: string, title: string): Promise<{ ok: true; sessionId: string; title: string }> {
+  const res = await fetch(`${base}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`Failed: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteSession(sessionId: string): Promise<{ ok: true; sessionId: string; deletedMessages: number }> {
+  const res = await fetch(`${base}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+    headers: {},
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`Failed: ${res.status}`);
+  return res.json();
+}
+
 export async function getHistory(sessionId: string): Promise<{
-  messages: Array<{ role: "user" | "ai"; content: string }>;
+  messages: Array<{
+    role: "user" | "ai";
+    content: string;
+    attachments?: string[];
+    sources?: Array<{ id: string; title: string; url?: string; snippet?: string }>;
+    agentsInvolved?: string[];
+    documentDraft?: Record<string, unknown> | null;
+    progress?: DocumentProgress | null;
+    action?: string | null;
+    documentType?: DocumentType | null;
+  }>;
   document_type?: DocumentType | null;
 }> {
   const res = await fetch(`${base}/history?sessionId=${encodeURIComponent(sessionId)}`, {

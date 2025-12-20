@@ -16,6 +16,7 @@ export type ResumeDraftV1 = {
     linkedin?: string;
     github?: string;
     portfolio?: string;
+    website?: string;
   };
   summary?: string;
   experience?: Array<{
@@ -35,8 +36,31 @@ export type ResumeDraftV1 = {
     startDate?: string;
     endDate?: string;
     current?: boolean;
+    gpa?: string;
+    coursework?: string[];
+    honors?: string[];
   }>;
   skills?: Array<{ name: string; category?: string }>;
+  projects?: Array<{
+    name?: string;
+    description?: string;
+    technologies?: string[];
+    bullets?: string[];
+    url?: string;
+    github?: string;
+  }>;
+  certifications?: Array<{
+    name?: string;
+    issuer?: string;
+    date?: string;
+    expiryDate?: string;
+    credentialId?: string;
+    url?: string;
+  }>;
+  languages?: Array<{
+    name?: string;
+    proficiency?: string;
+  }>;
 };
 
 export type CVDraftV1 = ResumeDraftV1 & {
@@ -78,6 +102,7 @@ export function resumeFromDraft(draft: ResumeDraftV1, overrides?: Partial<Resume
       linkedin: draft.personalInfo?.linkedin,
       github: draft.personalInfo?.github,
       portfolio: draft.personalInfo?.portfolio,
+      website: draft.personalInfo?.website,
     },
     summary: draft.summary || '',
     experience:
@@ -109,6 +134,46 @@ export function resumeFromDraft(draft: ResumeDraftV1, overrides?: Partial<Resume
         name: s.name,
         category: s.category || SkillCategory.TECHNICAL,
       })) || [],
+    projects:
+      (draft.projects || [])
+        .filter((p) => Boolean((p?.name || '').trim() || (p?.description || '').trim()))
+        .map((p, idx) => ({
+          id: `proj-${Date.now()}-${idx}`,
+          name: p.name || '',
+          description: p.description || '',
+          technologies: Array.isArray(p.technologies) ? p.technologies.filter(Boolean) : [],
+          bullets: Array.isArray(p.bullets) ? p.bullets.filter(Boolean) : [],
+          url: p.url,
+          github: p.github,
+        })),
+    certifications:
+      (draft.certifications || [])
+        .filter((c) => Boolean((c?.name || '').trim() || (c?.issuer || '').trim()))
+        .map((c, idx) => ({
+          id: `cert-${Date.now()}-${idx}`,
+          name: c.name || '',
+          issuer: c.issuer || '',
+          date: c.date || '',
+          expiryDate: c.expiryDate || undefined,
+          credentialId: c.credentialId || undefined,
+          url: c.url || undefined,
+        })),
+    languages:
+      (draft.languages || [])
+        .filter((l) => Boolean((l?.name || '').trim()))
+        .map((l, idx) => ({
+          id: `lang-${Date.now()}-${idx}`,
+          name: l.name || '',
+          // Coerce to allowed enum values if possible; otherwise default to intermediate.
+          proficiency:
+            (l.proficiency as any) === 'native' ||
+            (l.proficiency as any) === 'fluent' ||
+            (l.proficiency as any) === 'professional' ||
+            (l.proficiency as any) === 'intermediate' ||
+            (l.proficiency as any) === 'basic'
+              ? (l.proficiency as any)
+              : 'intermediate',
+        })),
   };
 
   return { ...resume, ...(overrides || {}) };
@@ -158,6 +223,9 @@ export function resumeDraftFromStoragePayload(payload: DraftStoragePayload): Res
   const experienceRaw = coerceArray((candidate as any).experience || (candidate as any).workExperience || (candidate as any).work_experience);
   const educationRaw = coerceArray((candidate as any).education || (candidate as any).educations);
   const skillsRaw = coerceArray((candidate as any).skills || (candidate as any).skillset || (candidate as any).skill_set);
+  const projectsRaw = coerceArray((candidate as any).projects || (candidate as any).project || (candidate as any).portfolio);
+  const certificationsRaw = coerceArray((candidate as any).certifications || (candidate as any).certs || (candidate as any).certifications_list);
+  const languagesRaw = coerceArray((candidate as any).languages || (candidate as any).languageSkills || (candidate as any).language_skills);
 
   const draft: ResumeDraftV1 = {
     version: 1,
@@ -171,6 +239,7 @@ export function resumeDraftFromStoragePayload(payload: DraftStoragePayload): Res
       linkedin: typeof personalInfoRaw?.linkedin === 'string' ? (personalInfoRaw.linkedin as string) : undefined,
       github: typeof personalInfoRaw?.github === 'string' ? (personalInfoRaw.github as string) : undefined,
       portfolio: typeof personalInfoRaw?.portfolio === 'string' ? (personalInfoRaw.portfolio as string) : undefined,
+      website: typeof (personalInfoRaw as any)?.website === 'string' ? ((personalInfoRaw as any).website as string) : undefined,
     },
     experience: experienceRaw
       .map((e) => coerceObject(e))
@@ -215,6 +284,9 @@ export function resumeDraftFromStoragePayload(payload: DraftStoragePayload): Res
               ? ((e as any).end_date as string)
               : undefined,
         current: typeof (e as any).current === 'boolean' ? ((e as any).current as boolean) : undefined,
+        gpa: typeof (e as any).gpa === 'string' ? ((e as any).gpa as string) : undefined,
+        coursework: Array.isArray((e as any).coursework) ? ((e as any).coursework as string[]) : undefined,
+        honors: Array.isArray((e as any).honors) ? ((e as any).honors as string[]) : undefined,
       })),
     skills: skillsRaw
       .map((s) => (typeof s === 'string' ? ({ name: s } as Record<string, unknown>) : coerceObject(s)))
@@ -224,6 +296,37 @@ export function resumeDraftFromStoragePayload(payload: DraftStoragePayload): Res
         category: typeof (s as any).category === 'string' ? ((s as any).category as string) : undefined,
       }))
       .filter((s) => Boolean(s.name)),
+
+    projects: projectsRaw
+      .map((p) => coerceObject(p))
+      .filter((p): p is Record<string, unknown> => Boolean(p))
+      .map((p) => ({
+        name: typeof (p as any).name === 'string' ? ((p as any).name as string) : undefined,
+        description: typeof (p as any).description === 'string' ? ((p as any).description as string) : undefined,
+        technologies: Array.isArray((p as any).technologies) ? ((p as any).technologies as string[]) : undefined,
+        bullets: Array.isArray((p as any).bullets) ? ((p as any).bullets as string[]) : undefined,
+        url: typeof (p as any).url === 'string' ? ((p as any).url as string) : undefined,
+        github: typeof (p as any).github === 'string' ? ((p as any).github as string) : undefined,
+      })),
+    certifications: certificationsRaw
+      .map((c) => coerceObject(c))
+      .filter((c): c is Record<string, unknown> => Boolean(c))
+      .map((c) => ({
+        name: typeof (c as any).name === 'string' ? ((c as any).name as string) : undefined,
+        issuer: typeof (c as any).issuer === 'string' ? ((c as any).issuer as string) : undefined,
+        date: typeof (c as any).date === 'string' ? ((c as any).date as string) : undefined,
+        expiryDate: typeof (c as any).expiryDate === 'string' ? ((c as any).expiryDate as string) : undefined,
+        credentialId: typeof (c as any).credentialId === 'string' ? ((c as any).credentialId as string) : undefined,
+        url: typeof (c as any).url === 'string' ? ((c as any).url as string) : undefined,
+      })),
+    languages: languagesRaw
+      .map((l) => (typeof l === 'string' ? ({ name: l } as Record<string, unknown>) : coerceObject(l)))
+      .filter((l): l is Record<string, unknown> => Boolean(l))
+      .map((l) => ({
+        name: typeof (l as any).name === 'string' ? ((l as any).name as string) : '',
+        proficiency: typeof (l as any).proficiency === 'string' ? ((l as any).proficiency as string) : undefined,
+      }))
+      .filter((l) => Boolean(l.name)),
   };
 
   return draft;

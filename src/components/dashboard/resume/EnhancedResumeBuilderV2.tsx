@@ -37,6 +37,8 @@ import LanguagesForm from './forms/LanguagesForm';
 import SectionManager from './SectionManager';
 import DesignCustomizer from './DesignCustomizer';
 import ImprovedResumePreview from './ImprovedResumePreview';
+import { TemplateSwitcher } from './TemplateSwitcher';
+import { getTemplatePresetById } from '@/lib/resume/designPresets';
 
 interface ResumeStep {
   id: string;
@@ -250,6 +252,27 @@ export default function EnhancedResumeBuilderV2({
     }));
   }, []);
 
+  const handleTemplateChange = useCallback(
+    (template: ResumeTemplate) => {
+      const preset = getTemplatePresetById(String(template));
+      updateResume({
+        template,
+        design: {
+          colors: {
+            primary: preset.colors.primary,
+            secondary: preset.colors.secondary,
+          },
+          font: preset.fonts.heading,
+          layout: {
+            columns: preset.layout.columns,
+            spacing: preset.layout.spacing,
+          },
+        },
+      });
+    },
+    [updateResume]
+  );
+
   const markStepComplete = useCallback((stepIndex: number) => {
     setCompletedSteps(prev => new Set(prev).add(stepIndex));
   }, []);
@@ -356,7 +379,7 @@ export default function EnhancedResumeBuilderV2({
             onClick={onExport}
             variant="outline"
             disabled={!onExport}
-            className="w-full border-slate-700 hover:bg-slate-800"
+            className="w-full"
           >
             <Download className="w-4 h-4 mr-2" />
             Export PDF
@@ -370,7 +393,7 @@ export default function EnhancedResumeBuilderV2({
       </div>
 
       {/* Main Content - Form Editor */}
-      <div className="max-w-100 flex flex-col bg-slate-50 dark:bg-slate-900">
+      <div className="max-w-100 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-900">
         {/* Header */}
         <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between">
@@ -383,6 +406,11 @@ export default function EnhancedResumeBuilderV2({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <TemplateSwitcher
+                currentTemplate={resume.template}
+                onTemplateChange={handleTemplateChange}
+                className="hidden md:inline-flex"
+              />
               <Button
                 onClick={handlePrevious}
                 disabled={currentStep === 0}
@@ -427,7 +455,7 @@ export default function EnhancedResumeBuilderV2({
       </div>
 
       {/* Right Sidebar - Live Preview */}
-      <div className="flex-1 bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col">
+      <div className="flex-1 min-h-0 bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col">
         <div className="p-4 border-b border-slate-200 dark:border-slate-700">
           <h3 className="font-semibold">Live Preview</h3>
           <p className="text-xs text-muted-foreground mt-1">
@@ -438,21 +466,24 @@ export default function EnhancedResumeBuilderV2({
         <div className="p-4 border-b border-slate-200 dark:border-slate-700">
           <div className="text-sm font-semibold mb-2">Edit by message</div>
           <div className="flex gap-2">
-            <input
+            <Input
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
-              placeholder='e.g. "add skill Python"'
-              className="flex-1 h-9 px-3 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+              placeholder='Try: "add experience Software Engineer at Acme (2023 - 2025): built X; improved Y"'
+              className="h-9"
             />
             <Button size="sm" onClick={handleApplyInstruction}>
               Apply
             </Button>
           </div>
+          <div className="text-xs text-muted-foreground mt-2">
+            Examples: set email to ... · set linkedin to ... · add project ... · add certification ... · add language ...
+          </div>
           {lastInstructionError && (
             <div className="text-xs text-red-600 mt-2">{lastInstructionError}</div>
           )}
         </div>
-        <ImprovedResumePreview resume={resume} />
+        <ImprovedResumePreview resume={resume} onDownload={onExport} />
       </div>
     </div>
   );

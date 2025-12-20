@@ -27,6 +27,16 @@ export type ChatMessageDoc = {
   createdAt: Date;
   attachments?: string[];
   sources?: Array<{ id: string; title: string; url?: string; snippet?: string }>;
+  agentsInvolved?: string[];
+  documentDraft?: Record<string, unknown>;
+  progress?: {
+    collected_fields: string[];
+    missing_fields: string[];
+    percentage: number;
+    ready_for_generation?: boolean;
+  };
+  action?: string;
+  documentType?: string | null;
 };
 
 export const CHAT_COLLECTIONS = {

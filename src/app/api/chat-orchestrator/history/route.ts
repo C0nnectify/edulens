@@ -29,6 +29,12 @@ export async function GET(req: NextRequest) {
         role: m.role,
         content: m.content,
         attachments: m.attachments ?? [],
+        sources: m.sources ?? [],
+        agentsInvolved: m.agentsInvolved ?? [],
+        documentDraft: m.documentDraft ?? null,
+        progress: m.progress ?? null,
+        action: m.action ?? null,
+        documentType: m.documentType ?? null,
         createdAt: m.createdAt?.toISOString?.() ? m.createdAt.toISOString() : undefined,
       })),
     });

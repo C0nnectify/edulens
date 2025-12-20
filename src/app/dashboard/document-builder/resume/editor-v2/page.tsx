@@ -156,7 +156,9 @@ function ResumeEditorContent() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `resume.${format}`;
+      const contentDisposition = response.headers.get('Content-Disposition') || '';
+      const fileNameMatch = /filename="?([^";]+)"?/i.exec(contentDisposition);
+      a.download = fileNameMatch?.[1] || `resume.${format}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
