@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ export default function DreamModePage() {
   const [showSidebar, setShowSidebar] = useState(true); // State for desktop sidebar
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const roadmapContainerRef = useRef<HTMLDivElement>(null);
 
   // Load stages on mount
   useEffect(() => {
@@ -128,7 +129,51 @@ export default function DreamModePage() {
 
   const handleNext = () => {
     if (currentStageIndex < stages.length - 1) {
-      setCurrentStageIndex(currentStageIndex + 1);
+      const newIndex = currentStageIndex + 1;
+      setCurrentStageIndex(newIndex);
+      
+      // Scroll to make the new stage visible
+      setTimeout(() => {
+        scrollToStage(newIndex);
+      }, 100);
+    }
+  };
+
+  const handlePreviousWithScroll = () => {
+    if (currentStageIndex > 0) {
+      const newIndex = currentStageIndex - 1;
+      setCurrentStageIndex(newIndex);
+      
+      // Scroll to make the new stage visible
+      setTimeout(() => {
+        scrollToStage(newIndex);
+      }, 100);
+    }
+  };
+
+  // Function to scroll to a specific stage
+  const scrollToStage = (stageIndex: number) => {
+    const totalStages = stages.length;
+    const VERTICAL_SPACING = 150;
+    const PADDING_TOP = 40;
+    const TOTAL_HEIGHT = totalStages * VERTICAL_SPACING + PADDING_TOP * 2;
+    
+    // Calculate the Y position of the stage (inverted as stages go from bottom to top)
+    const stageY = TOTAL_HEIGHT - (PADDING_TOP + stageIndex * VERTICAL_SPACING);
+    
+    // Calculate scroll position relative to the roadmap container
+    if (roadmapContainerRef.current) {
+      const containerRect = roadmapContainerRef.current.getBoundingClientRect();
+      const containerHeight = roadmapContainerRef.current.scrollHeight;
+      
+      // Calculate the actual pixel position on the page
+      const scrollRatio = stageY / TOTAL_HEIGHT;
+      const targetScrollTop = containerRect.top + window.scrollY + (containerHeight * scrollRatio) - (window.innerHeight / 2);
+      
+      window.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth'
+      });
     }
   };
 
@@ -136,6 +181,11 @@ export default function DreamModePage() {
     setCurrentStageIndex(index);
     setShowBottomSheet(true); // Open bottom sheet on mobile
     setShowSidebar(true); // Open sidebar on desktop
+    
+    // Scroll to the clicked stage
+    setTimeout(() => {
+      scrollToStage(index);
+    }, 100);
   };
 
   if (loading) {
@@ -197,7 +247,7 @@ export default function DreamModePage() {
         <div className="flex justify-center">
           
           {/* Left: Playful Roadmap */}
-          <div className={`w-full transition-all duration-500 ease-in-out ${showSidebar ? 'lg:mr-[420px]' : ''}`}>
+          <div ref={roadmapContainerRef} className={`w-full transition-all duration-500 ease-in-out ${showSidebar ? 'lg:mr-[420px]' : ''}`}>
             <PlayfulRoadmap
               stages={stages}
               currentStageIndex={currentStageIndex}
@@ -219,7 +269,7 @@ export default function DreamModePage() {
                 <StageDetailSidebar 
                   stage={currentStage}
                   onNext={handleNext}
-                  onPrevious={handlePrevious}
+                  onPrevious={handlePreviousWithScroll}
                   hasNext={currentStageIndex < stages.length - 1}
                   hasPrevious={currentStageIndex > 0}
                   onClose={() => setShowSidebar(false)}
@@ -234,7 +284,7 @@ export default function DreamModePage() {
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4 z-40">
         <div className="flex gap-3">
           <Button
-            onClick={handlePrevious}
+            onClick={handlePreviousWithScroll}
             disabled={currentStageIndex === 0}
             variant="outline"
             className="flex-1"

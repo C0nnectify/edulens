@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Zap, Target, Award, Globe, FileCheck, Sparkles } from 'lucide-react';
-import { motion, useInView, useMotionValue, animate } from 'framer-motion';
+import { motion, useInView, useMotionValue, animate, AnimatePresence } from 'framer-motion';
 
 // --- Utility Components ---
 
@@ -42,215 +43,662 @@ const AnimatedCounter = ({
   );
 };
 
-// --- Detailed Vector Illustrations ---
+// --- Enhanced Animated Vector Illustrations ---
 
-// 1. Ignite Your Potential - Rocket + World Map
-const RocketVector = ({ isActive }: { isActive: boolean }) => (
-  <svg
+// Floating particles component for all vectors
+const FloatingParticles = ({ isActive, color = "#4F46E5" }: { isActive: boolean; color?: string }) => (
+  <g className={isActive ? 'opacity-100' : 'opacity-0'}>
+    {[...Array(8)].map((_, i) => (
+      <circle
+        key={i}
+        cx={50 + i * 60}
+        cy={50 + (i % 3) * 80}
+        r={3 + (i % 3)}
+        fill={color}
+        opacity={0.3}
+        className={isActive ? `animate-float-particle-${i % 4}` : ''}
+      />
+    ))}
+  </g>
+);
+
+// 1. Ignite Your Potential - Enhanced Rocket with Dynamic Elements
+const RocketVector = ({ isActive, typingProgress }: { isActive: boolean; typingProgress: number }) => (
+  <motion.svg
     viewBox="0 0 500 400"
-    className={`w-full h-full transition-all duration-700 ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}
+    className="w-full h-full"
+    initial={{ opacity: 0, scale: 0.8 }}
+    animate={{ 
+      opacity: isActive ? 1 : 0, 
+      scale: isActive ? 1 : 0.8,
+      rotateY: isActive ? 0 : -15
+    }}
+    transition={{ duration: 0.8, ease: "easeOut" }}
   >
     <defs>
-      <linearGradient id="rocketBody" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stopColor="#4F46E5" />
-        <stop offset="100%" stopColor="#7C3AED" />
+      <linearGradient id="rocketBodyEnhanced" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#6366F1">
+          <animate attributeName="stop-color" values="#6366F1;#8B5CF6;#6366F1" dur="3s" repeatCount="indefinite" />
+        </stop>
+        <stop offset="100%" stopColor="#4F46E5">
+          <animate attributeName="stop-color" values="#4F46E5;#7C3AED;#4F46E5" dur="3s" repeatCount="indefinite" />
+        </stop>
       </linearGradient>
-      <linearGradient id="rocketFire" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="#F59E0B" />
+      <linearGradient id="rocketFireEnhanced" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#FBBF24" />
+        <stop offset="50%" stopColor="#F59E0B" />
         <stop offset="100%" stopColor="#EF4444" />
       </linearGradient>
-      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-        <feGaussianBlur stdDeviation="3" result="blur" />
+      <filter id="glowEnhanced" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="8" result="blur" />
         <feComposite in="SourceGraphic" in2="blur" operator="over" />
       </filter>
+      <filter id="softGlow">
+        <feGaussianBlur stdDeviation="4" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <radialGradient id="starGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#FBBF24" />
+        <stop offset="100%" stopColor="transparent" />
+      </radialGradient>
     </defs>
 
-    {/* World Map Background (Stylized) */}
-    <g opacity="0.15" transform="translate(50, 50) scale(0.8)">
-      <path 
-        d="M50 150 Q80 120 120 130 T200 100 T300 120 T400 80" 
-        fill="none" stroke="#4F46E5" strokeWidth="2" strokeDasharray="4 4"
-      />
-      <path 
-        d="M20 200 Q100 250 180 220 T350 240 T450 200" 
-        fill="none" stroke="#4F46E5" strokeWidth="2" strokeDasharray="4 4" 
-      />
-      
-      {/* Continents (Abstract blobs) */}
-      <path d="M40 100 C60 80 100 80 120 100 C140 120 120 160 100 180 C60 180 40 140 40 100 Z" fill="#94A3B8" />
-      <path d="M180 60 C200 40 250 50 270 70 C290 90 280 130 250 140 C210 150 180 100 180 60 Z" fill="#94A3B8" />
-      <path d="M320 120 C340 100 380 100 400 120 C420 140 400 180 360 180 C320 170 300 140 320 120 Z" fill="#94A3B8" />
-      
-      {/* Location Markers */}
-      <circle cx="100" cy="120" r="4" fill="#EF4444" className={isActive ? 'animate-ping-slow' : ''} />
-      <circle cx="240" cy="90" r="4" fill="#EF4444" className={isActive ? 'animate-ping-slow delay-300' : ''} />
-      <circle cx="360" cy="140" r="4" fill="#EF4444" className={isActive ? 'animate-ping-slow delay-700' : ''} />
+    {/* Animated Background Stars */}
+    <g className={isActive ? 'opacity-100' : 'opacity-0'}>
+      {[...Array(20)].map((_, i) => (
+        <g key={i}>
+          <circle
+            cx={30 + (i * 47) % 460}
+            cy={20 + (i * 31) % 360}
+            r={1 + (i % 3)}
+            fill="#E0E7FF"
+            className={isActive ? `animate-star-twinkle-${i % 5}` : ''}
+          />
+        </g>
+      ))}
     </g>
 
-    {/* Trajectory Line */}
-    <path
-      d="M50 350 Q150 350 200 250 T350 150 T450 50"
+    {/* Animated Grid Lines - Space Background */}
+    <g opacity="0.08">
+      {[...Array(6)].map((_, i) => (
+        <line
+          key={`h-${i}`}
+          x1="0"
+          y1={i * 80}
+          x2="500"
+          y2={i * 80}
+          stroke="#6366F1"
+          strokeWidth="1"
+          className={isActive ? 'animate-grid-pulse' : ''}
+          style={{ animationDelay: `${i * 0.1}s` }}
+        />
+      ))}
+      {[...Array(8)].map((_, i) => (
+        <line
+          key={`v-${i}`}
+          x1={i * 70}
+          y1="0"
+          x2={i * 70}
+          y2="400"
+          stroke="#6366F1"
+          strokeWidth="1"
+          className={isActive ? 'animate-grid-pulse' : ''}
+          style={{ animationDelay: `${i * 0.1}s` }}
+        />
+      ))}
+    </g>
+
+    {/* Planet/Globe with Pulsing Ring */}
+    <g className={isActive ? 'animate-planet-float' : 'opacity-0'}>
+      <circle cx="400" cy="300" r="50" fill="#1E1B4B" />
+      <ellipse cx="400" cy="300" rx="70" ry="15" fill="none" stroke="#818CF8" strokeWidth="2" opacity="0.5" className="animate-ring-rotate" />
+      <circle cx="400" cy="300" r="55" fill="none" stroke="#6366F1" strokeWidth="1" className="animate-ring-pulse" />
+      <circle cx="385" cy="285" r="15" fill="#4338CA" opacity="0.7" />
+      <circle cx="420" cy="310" r="8" fill="#6366F1" opacity="0.5" />
+    </g>
+
+    {/* Dynamic Trajectory with Progress */}
+    <motion.path
+      d="M80 360 Q150 320 200 250 T320 150 T430 60"
       fill="none"
-      stroke="#CBD5E1"
-      strokeWidth="2"
-      strokeDasharray="8 8"
-      className={isActive ? 'animate-draw-path' : 'opacity-0'}
+      stroke="url(#rocketBodyEnhanced)"
+      strokeWidth="3"
+      strokeDasharray="500"
+      initial={{ strokeDashoffset: 500 }}
+      animate={{ strokeDashoffset: isActive ? 500 - (typingProgress * 500) : 500 }}
+      transition={{ duration: 0.1 }}
+      filter="url(#softGlow)"
     />
 
-    {/* Rocket Group */}
-    <g className={isActive ? 'animate-fly-across' : 'opacity-0'}>
-      <g transform="rotate(45)">
-        {/* Body */}
-        <path d="M0 -40 C-20 -10 -20 30 -20 50 L-25 60 L0 65 L25 60 L20 50 C20 30 20 -10 0 -40 Z" fill="url(#rocketBody)" />
-        <circle cx="0" cy="10" r="10" fill="white" />
-        <circle cx="0" cy="10" r="6" fill="#A5B4FC" />
-        {/* Fins */}
-        <path d="M-20 40 L-35 70 L-20 60 Z" fill="#4338CA" />
-        <path d="M20 40 L35 70 L20 60 Z" fill="#4338CA" />
-        {/* Flame */}
-        <path d="M-10 65 Q0 100 10 65 Z" fill="url(#rocketFire)" className="animate-flicker" />
-      </g>
+    {/* Trail Particles */}
+    <g className={isActive ? 'animate-trail-particles' : 'opacity-0'}>
+      {[...Array(6)].map((_, i) => (
+        <circle
+          key={i}
+          cx={100 + i * 50}
+          cy={340 - i * 40}
+          r={4 - i * 0.5}
+          fill="#A5B4FC"
+          opacity={0.8 - i * 0.1}
+          className={`animate-particle-trail-${i}`}
+        />
+      ))}
     </g>
 
-    {/* Clouds passing by */}
-    <g className={isActive ? 'animate-clouds-move' : 'opacity-0'}>
-      <ellipse cx="100" cy="300" rx="40" ry="15" fill="#F1F5F9" opacity="0.8" />
-      <ellipse cx="300" cy="250" rx="30" ry="12" fill="#F1F5F9" opacity="0.6" />
-      <ellipse cx="400" cy="320" rx="50" ry="20" fill="#F1F5F9" opacity="0.7" />
-    </g>
-  </svg>
+    {/* Main Rocket with Enhanced Animation */}
+    <motion.g 
+      initial={{ x: 50, y: 350, scale: 0.5, rotate: 0 }}
+      animate={{ 
+        x: isActive ? 350 + (typingProgress * 80) : 50,
+        y: isActive ? 100 - (typingProgress * 50) : 350,
+        scale: isActive ? 1 : 0.5,
+        rotate: isActive ? -45 : 0
+      }}
+      transition={{ 
+        type: "spring",
+        stiffness: 50,
+        damping: 15,
+        duration: 2
+      }}
+    >
+      {/* Rocket Glow Effect */}
+      <ellipse cx="0" cy="0" rx="60" ry="60" fill="url(#starGlow)" opacity="0.3" className="animate-rocket-glow" />
+      
+      {/* Rocket Body */}
+      <path d="M0 -50 C-25 -20 -25 30 -25 55 L-30 70 L0 80 L30 70 L25 55 C25 30 25 -20 0 -50 Z" fill="url(#rocketBodyEnhanced)" filter="url(#glowEnhanced)" />
+      
+      {/* Window */}
+      <circle cx="0" cy="5" r="14" fill="#1E1B4B" />
+      <circle cx="0" cy="5" r="10" fill="#312E81">
+        <animate attributeName="fill" values="#312E81;#4338CA;#312E81" dur="2s" repeatCount="indefinite" />
+      </circle>
+      <circle cx="-3" cy="2" r="3" fill="#A5B4FC" opacity="0.6" />
+      
+      {/* Fins with Gradient */}
+      <path d="M-25 45 L-45 85 L-25 70 Z" fill="#4338CA" />
+      <path d="M25 45 L45 85 L25 70 Z" fill="#4338CA" />
+      <path d="M0 55 L0 90 L10 80 L10 60 Z" fill="#3730A3" />
+      
+      {/* Enhanced Flame with Multiple Layers */}
+      <g className="animate-flame-dance">
+        <path d="M-15 80 Q0 140 15 80 Z" fill="#EF4444" opacity="0.8" />
+        <path d="M-12 80 Q0 130 12 80 Z" fill="#F59E0B" opacity="0.9" />
+        <path d="M-8 80 Q0 115 8 80 Z" fill="#FBBF24" />
+        <path d="M-4 80 Q0 100 4 80 Z" fill="#FEF3C7" />
+      </g>
+      
+      {/* Smoke Trail */}
+      <g className="animate-smoke">
+        <ellipse cx="-20" cy="100" rx="8" ry="12" fill="#CBD5E1" opacity="0.4" />
+        <ellipse cx="20" cy="105" rx="6" ry="10" fill="#E2E8F0" opacity="0.3" />
+        <ellipse cx="0" cy="115" rx="10" ry="15" fill="#F1F5F9" opacity="0.2" />
+      </g>
+    </motion.g>
+
+    {/* Floating "LAUNCH" Text with Typing Sync */}
+    <motion.g
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: isActive && typingProgress > 0.5 ? 1 : 0, y: isActive ? 0 : 20 }}
+      transition={{ duration: 0.5 }}
+    >
+      <text x="250" y="380" textAnchor="middle" className="text-2xl font-bold fill-indigo-600" opacity="0.6">
+        LAUNCHING YOUR DREAMS
+      </text>
+    </motion.g>
+  </motion.svg>
 );
 
-// 2. Crush Every Goal - Target + Automation Docs
-const TargetVector = ({ isActive }: { isActive: boolean }) => (
-  <svg
+// 2. Crush Every Goal - Enhanced Target with Dynamic Elements
+const TargetVector = ({ isActive, typingProgress }: { isActive: boolean; typingProgress: number }) => (
+  <motion.svg
     viewBox="0 0 500 400"
-    className={`w-full h-full transition-all duration-700 ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}
+    className="w-full h-full"
+    initial={{ opacity: 0, scale: 0.8 }}
+    animate={{ 
+      opacity: isActive ? 1 : 0, 
+      scale: isActive ? 1 : 0.8 
+    }}
+    transition={{ duration: 0.8, ease: "easeOut" }}
   >
     <defs>
-      <linearGradient id="docGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <linearGradient id="docGradientEnhanced" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#FFFFFF" />
-        <stop offset="100%" stopColor="#F1F5F9" />
+        <stop offset="100%" stopColor="#F0FDF4" />
       </linearGradient>
-      <filter id="scanGlow">
-        <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="#22C55E" />
+      <linearGradient id="targetGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#FEE2E2" />
+        <stop offset="100%" stopColor="#EF4444" />
+      </linearGradient>
+      <filter id="targetGlow">
+        <feGaussianBlur stdDeviation="6" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <filter id="checkGlow">
+        <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#22C55E" />
       </filter>
     </defs>
 
-    {/* Target Board (Background) */}
-    <g transform="translate(350, 200)" className={isActive ? 'animate-target-pulse' : ''}>
-      <circle r="100" fill="#F8FAFC" stroke="#E2E8F0" strokeWidth="2" />
-      <circle r="75" fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="2" />
-      <circle r="50" fill="white" stroke="#E2E8F0" strokeWidth="2" />
-      <circle r="25" fill="#EF4444" opacity="0.2" />
-      <circle r="12" fill="#EF4444" />
+    {/* Animated Background Pattern */}
+    <g opacity="0.05">
+      {[...Array(12)].map((_, i) => (
+        <circle
+          key={i}
+          cx={250}
+          cy={200}
+          r={30 + i * 30}
+          fill="none"
+          stroke="#10B981"
+          strokeWidth="1"
+          className={isActive ? `animate-ripple-${i % 4}` : ''}
+          style={{ animationDelay: `${i * 0.2}s` }}
+        />
+      ))}
     </g>
 
-    {/* Automation Documents */}
+    {/* Enhanced Target Board */}
+    <motion.g 
+      initial={{ scale: 0, x: 320, y: 200 }}
+      animate={{ 
+        scale: isActive ? 1 : 0,
+        x: 320,
+        y: 200
+      }}
+      transition={{ type: "spring", stiffness: 100, damping: 15 }}
+    >
+      {/* Outer pulsing rings */}
+      <circle r="130" fill="none" stroke="#FEE2E2" strokeWidth="2" className={isActive ? 'animate-target-ring-1' : ''} />
+      <circle r="115" fill="none" stroke="#FECACA" strokeWidth="1" className={isActive ? 'animate-target-ring-2' : ''} />
+      
+      {/* Target circles */}
+      <circle r="100" fill="#FEF2F2" stroke="#FCA5A5" strokeWidth="3" />
+      <circle r="75" fill="#FEE2E2" stroke="#F87171" strokeWidth="2" />
+      <circle r="50" fill="#FECACA" stroke="#EF4444" strokeWidth="2" />
+      <circle r="25" fill="#FCA5A5" />
+      <circle r="12" fill="url(#targetGradient)" filter="url(#targetGlow)">
+        <animate attributeName="r" values="12;15;12" dur="1s" repeatCount="indefinite" />
+      </circle>
+      
+      {/* Crosshairs */}
+      <line x1="-110" y1="0" x2="110" y2="0" stroke="#DC2626" strokeWidth="1" strokeDasharray="5 5" opacity="0.5" />
+      <line x1="0" y1="-110" x2="0" y2="110" stroke="#DC2626" strokeWidth="1" strokeDasharray="5 5" opacity="0.5" />
+    </motion.g>
+
+    {/* Documents with Progress Tracking */}
     <g>
-      {/* Document 1 */}
-      <g className={isActive ? 'animate-doc-process delay-0' : 'opacity-0'} transform="translate(50, 100)">
-        <rect width="60" height="80" rx="4" fill="url(#docGradient)" stroke="#E2E8F0" strokeWidth="1" />
-        <line x1="10" y1="20" x2="50" y2="20" stroke="#CBD5E1" strokeWidth="4" strokeLinecap="round" />
-        <line x1="10" y1="35" x2="40" y2="35" stroke="#CBD5E1" strokeWidth="4" strokeLinecap="round" />
-        <line x1="10" y1="50" x2="45" y2="50" stroke="#CBD5E1" strokeWidth="4" strokeLinecap="round" />
-        {/* Checkmark */}
-        <circle cx="50" cy="70" r="12" fill="#22C55E" className={isActive ? 'animate-check-appear delay-1000' : 'opacity-0'} />
-        <path d="M46 70 L49 73 L54 67" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isActive ? 'animate-check-appear delay-1000' : 'opacity-0'} />
-      </g>
+      {/* Document 1 - Resume */}
+      <motion.g 
+        initial={{ x: 30, y: 320, opacity: 0, scale: 0.8 }}
+        animate={{ 
+          x: isActive && typingProgress > 0.2 ? 60 : 30,
+          y: isActive && typingProgress > 0.2 ? 80 : 320,
+          opacity: isActive ? 1 : 0,
+          scale: isActive ? 1 : 0.8
+        }}
+        transition={{ type: "spring", stiffness: 80, damping: 15, delay: 0.2 }}
+      >
+        <rect width="70" height="90" rx="6" fill="url(#docGradientEnhanced)" stroke="#D1FAE5" strokeWidth="2" filter="url(#targetGlow)" />
+        <rect x="8" y="12" width="54" height="8" rx="2" fill="#6EE7B7" />
+        <rect x="8" y="26" width="40" height="4" rx="1" fill="#A7F3D0" />
+        <rect x="8" y="36" width="50" height="4" rx="1" fill="#A7F3D0" />
+        <rect x="8" y="46" width="35" height="4" rx="1" fill="#A7F3D0" />
+        <rect x="8" y="60" width="54" height="20" rx="2" fill="#ECFDF5" stroke="#D1FAE5" strokeWidth="1" />
+        
+        {/* Animated checkmark */}
+        <motion.g
+          initial={{ scale: 0 }}
+          animate={{ scale: isActive && typingProgress > 0.5 ? 1 : 0 }}
+          transition={{ type: "spring", stiffness: 200, damping: 10, delay: 0.5 }}
+        >
+          <circle cx="60" cy="80" r="14" fill="#22C55E" filter="url(#checkGlow)" />
+          <path d="M53 80 L58 85 L67 74" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </motion.g>
+      </motion.g>
 
-      {/* Document 2 */}
-      <g className={isActive ? 'animate-doc-process delay-500' : 'opacity-0'} transform="translate(130, 150)">
-        <rect width="60" height="80" rx="4" fill="url(#docGradient)" stroke="#E2E8F0" strokeWidth="1" />
-        <line x1="10" y1="20" x2="50" y2="20" stroke="#CBD5E1" strokeWidth="4" strokeLinecap="round" />
-        <line x1="10" y1="35" x2="30" y2="35" stroke="#CBD5E1" strokeWidth="4" strokeLinecap="round" />
-        <line x1="10" y1="50" x2="50" y2="50" stroke="#CBD5E1" strokeWidth="4" strokeLinecap="round" />
-         {/* Checkmark */}
-         <circle cx="50" cy="70" r="12" fill="#22C55E" className={isActive ? 'animate-check-appear delay-1500' : 'opacity-0'} />
-        <path d="M46 70 L49 73 L54 67" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isActive ? 'animate-check-appear delay-1500' : 'opacity-0'} />
-      </g>
+      {/* Document 2 - Application */}
+      <motion.g 
+        initial={{ x: 80, y: 350, opacity: 0, scale: 0.8 }}
+        animate={{ 
+          x: isActive && typingProgress > 0.4 ? 100 : 80,
+          y: isActive && typingProgress > 0.4 ? 190 : 350,
+          opacity: isActive && typingProgress > 0.3 ? 1 : 0,
+          scale: isActive ? 1 : 0.8
+        }}
+        transition={{ type: "spring", stiffness: 80, damping: 15, delay: 0.4 }}
+      >
+        <rect width="70" height="90" rx="6" fill="url(#docGradientEnhanced)" stroke="#DBEAFE" strokeWidth="2" filter="url(#targetGlow)" />
+        <rect x="8" y="12" width="54" height="8" rx="2" fill="#93C5FD" />
+        <rect x="8" y="26" width="45" height="4" rx="1" fill="#BFDBFE" />
+        <rect x="8" y="36" width="38" height="4" rx="1" fill="#BFDBFE" />
+        <rect x="8" y="46" width="50" height="4" rx="1" fill="#BFDBFE" />
+        <circle cx="35" cy="68" r="12" fill="#EFF6FF" stroke="#BFDBFE" strokeWidth="1" />
+        
+        {/* Animated checkmark */}
+        <motion.g
+          initial={{ scale: 0 }}
+          animate={{ scale: isActive && typingProgress > 0.7 ? 1 : 0 }}
+          transition={{ type: "spring", stiffness: 200, damping: 10, delay: 0.7 }}
+        >
+          <circle cx="60" cy="80" r="14" fill="#22C55E" filter="url(#checkGlow)" />
+          <path d="M53 80 L58 85 L67 74" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </motion.g>
+      </motion.g>
     </g>
 
-    {/* Scanning Laser Beam */}
-    <g className={isActive ? 'animate-scanner' : 'opacity-0'}>
-      <line x1="40" y1="0" x2="200" y2="0" stroke="#22C55E" strokeWidth="2" filter="url(#scanGlow)" opacity="0.7" />
-      <rect x="40" y="0" width="160" height="40" fill="url(#scanGradient)" opacity="0.1" />
-    </g>
+    {/* Animated Arrow/Dart hitting target */}
+    <motion.g
+      initial={{ x: -100, y: 100, rotate: 45, opacity: 0 }}
+      animate={{ 
+        x: isActive && typingProgress > 0.8 ? 270 : -100,
+        y: isActive && typingProgress > 0.8 ? 200 : 100,
+        rotate: 45,
+        opacity: isActive && typingProgress > 0.6 ? 1 : 0
+      }}
+      transition={{ type: "spring", stiffness: 150, damping: 12, delay: 0.3 }}
+    >
+      {/* Arrow shaft */}
+      <rect x="-60" y="-4" width="80" height="8" rx="2" fill="#4F46E5" />
+      {/* Arrow head */}
+      <path d="M20 -12 L50 0 L20 12 Z" fill="#6366F1" />
+      {/* Feathers */}
+      <path d="M-60 -4 L-70 -15 L-50 -4 Z" fill="#818CF8" />
+      <path d="M-60 4 L-70 15 L-50 4 Z" fill="#818CF8" />
+    </motion.g>
 
-    {/* The Dart (Hits after docs processed) */}
-    <g className={isActive ? 'animate-dart-hit delay-2000' : 'opacity-0'} transform="translate(350, 150)">
-      <path d="M0 0 L50 -50" stroke="#1E293B" strokeWidth="4" strokeLinecap="round" />
-      <path d="M-5 5 L10 -10 L15 -5 L0 10 Z" fill="#334155" /> 
-      <path d="M40 -40 L70 -70 L80 -60 L50 -30 Z" fill="#4F46E5" />
-    </g>
-  </svg>
+    {/* Impact effect */}
+    <motion.g
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ 
+        scale: isActive && typingProgress > 0.9 ? [0, 1.5, 1] : 0,
+        opacity: isActive && typingProgress > 0.9 ? [0, 1, 0] : 0
+      }}
+      transition={{ duration: 0.5, delay: 0.5 }}
+    >
+      <circle cx="320" cy="200" r="30" fill="none" stroke="#22C55E" strokeWidth="3" />
+      <circle cx="320" cy="200" r="50" fill="none" stroke="#22C55E" strokeWidth="2" opacity="0.5" />
+    </motion.g>
+
+    {/* Progress indicator text */}
+    <motion.text
+      x="250"
+      y="380"
+      textAnchor="middle"
+      className="text-xl font-bold fill-emerald-600"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: isActive && typingProgress > 0.5 ? 0.6 : 0 }}
+    >
+      {Math.round(typingProgress * 100)}% COMPLETE
+    </motion.text>
+  </motion.svg>
 );
 
-// 3. Secure Your Legacy - Trophy + Certificate
-const TrophyVector = ({ isActive }: { isActive: boolean }) => (
-  <svg
+// 3. Secure Your Legacy - Enhanced Trophy with Celebration
+const TrophyVector = ({ isActive, typingProgress }: { isActive: boolean; typingProgress: number }) => (
+  <motion.svg
     viewBox="0 0 500 400"
-    className={`w-full h-full transition-all duration-700 ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}
+    className="w-full h-full"
+    initial={{ opacity: 0, scale: 0.8 }}
+    animate={{ 
+      opacity: isActive ? 1 : 0, 
+      scale: isActive ? 1 : 0.8 
+    }}
+    transition={{ duration: 0.8, ease: "easeOut" }}
   >
     <defs>
-      <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#FCD34D" />
+      <linearGradient id="goldGradientEnhanced" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#FDE68A">
+          <animate attributeName="stop-color" values="#FDE68A;#FBBF24;#FDE68A" dur="2s" repeatCount="indefinite" />
+        </stop>
         <stop offset="50%" stopColor="#F59E0B" />
         <stop offset="100%" stopColor="#B45309" />
       </linearGradient>
-      <filter id="shadow">
-        <feDropShadow dx="0" dy="4" stdDeviation="4" floodOpacity="0.2" />
+      <linearGradient id="shineGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="white" stopOpacity="0.8" />
+        <stop offset="50%" stopColor="white" stopOpacity="0" />
+        <stop offset="100%" stopColor="white" stopOpacity="0.3" />
+      </linearGradient>
+      <filter id="trophyGlow">
+        <feGaussianBlur stdDeviation="8" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <filter id="starFilter">
+        <feGaussianBlur stdDeviation="2" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
       </filter>
     </defs>
 
-    {/* Confetti Background */}
-    <g className={isActive ? 'animate-confetti-rain' : 'opacity-0'}>
-      <rect x="100" y="-10" width="6" height="10" fill="#EF4444" />
-      <rect x="200" y="-20" width="6" height="10" fill="#3B82F6" />
-      <rect x="300" y="-15" width="6" height="10" fill="#10B981" />
-      <rect x="400" y="-30" width="6" height="10" fill="#F59E0B" />
-      <circle cx="150" cy="-40" r="4" fill="#8B5CF6" />
-      <circle cx="350" cy="-25" r="4" fill="#EC4899" />
+    {/* Radiating light background */}
+    <motion.g
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ 
+        opacity: isActive ? 0.3 : 0,
+        scale: isActive ? 1 : 0.5
+      }}
+      transition={{ duration: 1.5 }}
+    >
+      {[...Array(12)].map((_, i) => (
+        <line
+          key={i}
+          x1="250"
+          y1="200"
+          x2={250 + Math.cos((i * 30 * Math.PI) / 180) * 250}
+          y2={200 + Math.sin((i * 30 * Math.PI) / 180) * 250}
+          stroke="#FBBF24"
+          strokeWidth="2"
+          opacity={0.2}
+          className={isActive ? `animate-ray-${i % 3}` : ''}
+        />
+      ))}
+    </motion.g>
+
+    {/* Enhanced Confetti */}
+    <g className={isActive && typingProgress > 0.3 ? 'opacity-100' : 'opacity-0'}>
+      {[...Array(30)].map((_, i) => {
+        const colors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
+        const shapes = ['rect', 'circle', 'triangle'];
+        const shape = shapes[i % 3];
+        const x = 50 + (i * 37) % 400;
+        const delay = (i * 0.1) % 2;
+        
+        return (
+          <g key={i} className={`animate-confetti-${i % 6}`} style={{ animationDelay: `${delay}s` }}>
+            {shape === 'rect' && (
+              <rect
+                x={x}
+                y={-20 - (i * 10) % 50}
+                width={6 + (i % 4)}
+                height={10 + (i % 6)}
+                fill={colors[i % colors.length]}
+                transform={`rotate(${(i * 45) % 360} ${x + 3} ${-10})`}
+              />
+            )}
+            {shape === 'circle' && (
+              <circle
+                cx={x}
+                cy={-20 - (i * 10) % 50}
+                r={3 + (i % 3)}
+                fill={colors[i % colors.length]}
+              />
+            )}
+            {shape === 'triangle' && (
+              <polygon
+                points={`${x},${-25 - (i * 10) % 50} ${x - 5},${-15 - (i * 10) % 50} ${x + 5},${-15 - (i * 10) % 50}`}
+                fill={colors[i % colors.length]}
+              />
+            )}
+          </g>
+        );
+      })}
     </g>
 
-    {/* Trophy */}
-    <g transform="translate(250, 220)" className={isActive ? 'animate-trophy-rise' : 'opacity-0'}>
-      <path d="M-60 -100 L-40 20 C-40 50 -20 70 0 70 C20 70 40 50 40 20 L60 -100 Z" fill="url(#goldGradient)" filter="url(#shadow)" />
-      <path d="M60 -80 C90 -80 90 -40 40 -20" fill="none" stroke="#F59E0B" strokeWidth="6" strokeLinecap="round" />
-      <path d="M-60 -80 C-90 -80 -90 -40 -40 -20" fill="none" stroke="#F59E0B" strokeWidth="6" strokeLinecap="round" />
-      <rect x="-20" y="70" width="40" height="20" fill="#B45309" />
-      <rect x="-40" y="90" width="80" height="10" fill="#F59E0B" rx="2" />
-    </g>
+    {/* Floating Stars */}
+    {[...Array(8)].map((_, i) => (
+      <motion.g
+        key={i}
+        initial={{ opacity: 0, scale: 0 }}
+        animate={{ 
+          opacity: isActive && typingProgress > 0.4 ? 1 : 0,
+          scale: isActive && typingProgress > 0.4 ? 1 : 0,
+          y: isActive ? [0, -10, 0] : 0
+        }}
+        transition={{ 
+          duration: 2,
+          delay: i * 0.2,
+          repeat: Infinity,
+          repeatType: "reverse"
+        }}
+      >
+        <path
+          d={`M${80 + (i * 55) % 380} ${60 + (i * 40) % 100} l3 6 6 1 -5 4 1 7 -5 -3 -5 3 1 -7 -5 -4 6 -1z`}
+          fill="#FBBF24"
+          filter="url(#starFilter)"
+        />
+      </motion.g>
+    ))}
 
-    {/* Floating Certificate (New Detail) */}
-    <g transform="translate(120, 180) rotate(-10)" className={isActive ? 'animate-cert-float' : 'opacity-0'}>
-      <rect width="100" height="80" rx="2" fill="white" stroke="#E2E8F0" strokeWidth="1" filter="url(#shadow)" />
-      <rect x="10" y="10" width="80" height="60" fill="none" stroke="#CBD5E1" strokeWidth="1" strokeDasharray="2 2" />
-      <line x1="20" y1="25" x2="80" y2="25" stroke="#1E293B" strokeWidth="3" strokeLinecap="round" />
-      <line x1="20" y1="40" x2="60" y2="40" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
-      {/* Ribbon Seal */}
-      <circle cx="70" cy="55" r="10" fill="#EF4444" />
-      <path d="M70 55 L65 75 L70 70 L75 75 Z" fill="#EF4444" />
-    </g>
-  </svg>
+    {/* Main Trophy */}
+    <motion.g
+      initial={{ y: 200, scale: 0.5, opacity: 0 }}
+      animate={{ 
+        y: isActive ? 0 : 200,
+        scale: isActive ? 1 : 0.5,
+        opacity: isActive ? 1 : 0
+      }}
+      transition={{ type: "spring", stiffness: 80, damping: 12, delay: 0.3 }}
+    >
+      {/* Trophy Base */}
+      <g transform="translate(250, 220)">
+        {/* Pedestal */}
+        <rect x="-50" y="100" width="100" height="15" rx="3" fill="#92400E" />
+        <rect x="-60" y="115" width="120" height="20" rx="4" fill="#78350F" />
+        <rect x="-45" y="85" width="90" height="20" rx="3" fill="#B45309" />
+        
+        {/* Trophy body */}
+        <path 
+          d="M-65 -110 L-45 25 C-45 60 -25 80 0 80 C25 80 45 60 45 25 L65 -110 Z" 
+          fill="url(#goldGradientEnhanced)" 
+          filter="url(#trophyGlow)"
+        />
+        
+        {/* Shine effect */}
+        <path 
+          d="M-55 -100 L-40 15 C-40 45 -20 60 0 60 C5 60 10 59 15 57 L15 -100 Z" 
+          fill="url(#shineGradient)"
+          opacity="0.5"
+        />
+        
+        {/* Handles */}
+        <path d="M65 -90 C100 -90 100 -40 45 -15" fill="none" stroke="url(#goldGradientEnhanced)" strokeWidth="12" strokeLinecap="round" />
+        <path d="M-65 -90 C-100 -90 -100 -40 -45 -15" fill="none" stroke="url(#goldGradientEnhanced)" strokeWidth="12" strokeLinecap="round" />
+        
+        {/* Stem */}
+        <rect x="-20" y="80" width="40" height="25" rx="4" fill="#92400E" />
+        
+        {/* Star decoration on trophy */}
+        <g className={isActive ? 'animate-star-spin' : ''}>
+          <path d="M0 -60 l8 16 18 3 -13 13 3 18 -16 -8 -16 8 3 -18 -13 -13 18 -3z" fill="#FEF3C7" />
+          <path d="M0 -55 l5 10 11 2 -8 8 2 11 -10 -5 -10 5 2 -11 -8 -8 11 -2z" fill="#FBBF24" />
+        </g>
+      </g>
+    </motion.g>
+
+    {/* Floating Certificate */}
+    <motion.g
+      initial={{ x: 50, y: 280, rotate: -20, opacity: 0 }}
+      animate={{ 
+        x: isActive && typingProgress > 0.5 ? 80 : 50,
+        y: isActive && typingProgress > 0.5 ? 180 : 280,
+        rotate: isActive ? -10 : -20,
+        opacity: isActive && typingProgress > 0.4 ? 1 : 0
+      }}
+      transition={{ type: "spring", stiffness: 60, damping: 12, delay: 0.6 }}
+    >
+      <rect width="110" height="85" rx="4" fill="white" stroke="#E5E7EB" strokeWidth="2" filter="url(#trophyGlow)" />
+      <rect x="8" y="8" width="94" height="69" fill="none" stroke="#D1D5DB" strokeWidth="1" strokeDasharray="3 3" />
+      <text x="55" y="30" textAnchor="middle" className="text-xs font-bold fill-slate-800">CERTIFICATE</text>
+      <line x1="15" y1="45" x2="95" y2="45" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+      <line x1="25" y1="55" x2="85" y2="55" stroke="#E5E7EB" strokeWidth="2" strokeLinecap="round" />
+      
+      {/* Ribbon seal */}
+      <g transform="translate(85, 65)">
+        <circle r="12" fill="#DC2626" />
+        <circle r="8" fill="#EF4444" />
+        <path d="M0 12 L-6 30 L0 25 L6 30 Z" fill="#DC2626" />
+        <circle r="4" fill="#FCA5A5" />
+      </g>
+    </motion.g>
+
+    {/* Medal */}
+    <motion.g
+      initial={{ x: 380, y: 250, rotate: 15, opacity: 0 }}
+      animate={{ 
+        x: isActive && typingProgress > 0.6 ? 370 : 380,
+        y: isActive && typingProgress > 0.6 ? 200 : 250,
+        rotate: isActive ? 10 : 15,
+        opacity: isActive && typingProgress > 0.5 ? 1 : 0
+      }}
+      transition={{ type: "spring", stiffness: 60, damping: 12, delay: 0.8 }}
+    >
+      {/* Ribbon */}
+      <path d="M0 -30 L-15 -60 L-25 -60 L-10 -20 Z" fill="#3B82F6" />
+      <path d="M0 -30 L15 -60 L25 -60 L10 -20 Z" fill="#2563EB" />
+      
+      {/* Medal */}
+      <circle r="30" fill="#F59E0B" filter="url(#trophyGlow)" />
+      <circle r="25" fill="#FBBF24" />
+      <circle r="20" fill="none" stroke="#FDE68A" strokeWidth="2" />
+      <text y="6" textAnchor="middle" className="text-lg font-bold fill-amber-800">★</text>
+    </motion.g>
+
+    {/* Success text */}
+    <motion.text
+      x="250"
+      y="380"
+      textAnchor="middle"
+      className="text-xl font-bold fill-amber-600"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ 
+        opacity: isActive && typingProgress > 0.7 ? 0.7 : 0,
+        y: isActive ? 0 : 10
+      }}
+      transition={{ duration: 0.5 }}
+    >
+      🎉 ACHIEVEMENT UNLOCKED 🎉
+    </motion.text>
+  </motion.svg>
 );
 
 const DynamicHeroSection = () => {
+  const router = useRouter();
   const slides = useMemo(() => [
     { 
       text: 'Ignite Your Potential', 
       Vector: RocketVector,
-      sub: "Don't just dream. Launch your career with AI-powered precision."
+      sub: "Don't just dream. Launch your career with AI-powered precision.",
+      gradient: 'from-indigo-600 via-purple-600 to-pink-600'
     },
     { 
       text: 'Crush Every Goal', 
       Vector: TargetVector, 
-      sub: "Hit the bullseye on your applications with automated document verification."
+      sub: "Hit the bullseye on your applications with automated document verification.",
+      gradient: 'from-emerald-600 via-teal-600 to-cyan-600'
     },
     { 
       text: 'Secure Your Legacy', 
       Vector: TrophyVector,
-      sub: "Join the top 1% of applicants who let nothing stand in their way."
+      sub: "Join the top 1% of applicants who let nothing stand in their way.",
+      gradient: 'from-amber-500 via-orange-500 to-red-500'
     },
   ], []);
 
@@ -258,10 +706,20 @@ const DynamicHeroSection = () => {
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [typingProgress, setTypingProgress] = useState(0);
+
+  const [dreamPrompt, setDreamPrompt] = useState('');
 
   const typeSpeed = 50; 
   const deleteSpeed = 20;
-  const pauseTime = 4000; // Increased pause time to let animations finish
+  const pauseTime = 4000;
+
+  // Calculate typing progress (0 to 1)
+  useEffect(() => {
+    const currentText = slides[currentIndex].text;
+    const progress = currentText.length > 0 ? displayedText.length / currentText.length : 0;
+    setTypingProgress(isDeleting ? 1 - progress : progress);
+  }, [displayedText, currentIndex, slides, isDeleting]);
 
   const handleTyping = useCallback(() => {
     const currentText = slides[currentIndex].text;
@@ -294,6 +752,13 @@ const DynamicHeroSection = () => {
     { icon: Zap, value: 10, prefix: '', suffix: 'x', label: 'Faster Apply' },
     { icon: Award, value: 50, prefix: '$', suffix: 'k+', label: 'Scholarships' },
   ], []);
+
+  const handleDreamSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = dreamPrompt.trim();
+    if (!trimmed) return;
+    router.push(`/dream?q=${encodeURIComponent(trimmed)}`);
+  }, [dreamPrompt, router]);
 
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden bg-white pt-24 pb-16">
@@ -328,13 +793,24 @@ const DynamicHeroSection = () => {
                 Ready To
               </span>
               <div className="relative block">
-                <span className="text-5xl sm:text-7xl lg:text-8xl font-black tracking-tighter bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent break-words leading-tight">
-                  {displayedText}
-                </span>
                 <motion.span 
-                  className="inline-block w-[6px] h-[40px] sm:h-[60px] lg:h-[80px] bg-indigo-600 ml-2 align-baseline"
+                  key={currentIndex}
+                  className={`text-5xl sm:text-7xl lg:text-8xl font-black tracking-tighter bg-gradient-to-r ${slides[currentIndex].gradient} bg-clip-text text-transparent break-words leading-tight`}
+                  initial={{ opacity: 0.8 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {displayedText}
+                </motion.span>
+                <motion.span 
+                  className={`inline-block w-[6px] h-[40px] sm:h-[60px] lg:h-[80px] ml-2 align-baseline bg-gradient-to-b ${slides[currentIndex].gradient.replace('bg-gradient-to-r ', '')}`}
                   animate={{ opacity: [1, 0] }}
                   transition={{ duration: 0.5, repeat: Infinity }}
+                  style={{ 
+                    background: currentIndex === 0 ? 'linear-gradient(to bottom, #4F46E5, #7C3AED)' : 
+                               currentIndex === 1 ? 'linear-gradient(to bottom, #10B981, #06B6D4)' : 
+                               'linear-gradient(to bottom, #F59E0B, #EF4444)'
+                  }}
                 />
               </div>
             </div>
@@ -362,7 +838,7 @@ const DynamicHeroSection = () => {
               </a>
               
               <a 
-                href="/roadmap"
+                href="/roadmap/dream"
                 className="px-8 py-4 bg-white border-2 border-slate-200 rounded-xl font-bold text-slate-700 hover:border-indigo-600 hover:text-indigo-600 transition-colors duration-300 flex items-center justify-center"
               >
                 View Roadmap
@@ -392,12 +868,75 @@ const DynamicHeroSection = () => {
           </div>
 
           <div className="relative h-[400px] lg:h-[600px] flex items-center justify-center z-10">
-             <div className="absolute w-[80%] h-[80%] bg-gradient-to-tr from-indigo-50 to-purple-50 rounded-full blur-3xl animate-pulse-slow" />
-             {slides.map((slide, index) => (
-                <div key={index} className="absolute inset-0 flex items-center justify-center p-4 sm:p-8">
-                  <slide.Vector isActive={currentIndex === index} />
-                </div>
-             ))}
+             {/* Animated background glow that changes with slides */}
+             <motion.div 
+               className="absolute w-[90%] h-[90%] rounded-full blur-3xl"
+               animate={{ 
+                 background: currentIndex === 0 
+                   ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15))'
+                   : currentIndex === 1 
+                   ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.15))'
+                   : 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(239, 68, 68, 0.15))',
+                 scale: [1, 1.05, 1]
+               }}
+               transition={{ 
+                 background: { duration: 0.8 },
+                 scale: { duration: 3, repeat: Infinity, repeatType: "reverse" }
+               }}
+             />
+             
+             {/* Orbiting particles */}
+             <div className="absolute w-full h-full">
+               {[...Array(6)].map((_, i) => (
+                 <motion.div
+                   key={i}
+                   className="absolute w-3 h-3 rounded-full"
+                   style={{
+                     background: currentIndex === 0 ? '#6366F1' : currentIndex === 1 ? '#10B981' : '#F59E0B',
+                     top: '50%',
+                     left: '50%',
+                   }}
+                   animate={{
+                     x: [
+                       Math.cos((i * 60 * Math.PI) / 180) * 150,
+                       Math.cos(((i * 60 + 180) * Math.PI) / 180) * 150,
+                       Math.cos((i * 60 * Math.PI) / 180) * 150,
+                     ],
+                     y: [
+                       Math.sin((i * 60 * Math.PI) / 180) * 150,
+                       Math.sin(((i * 60 + 180) * Math.PI) / 180) * 150,
+                       Math.sin((i * 60 * Math.PI) / 180) * 150,
+                     ],
+                     opacity: [0.3, 0.7, 0.3],
+                     scale: [0.8, 1.2, 0.8],
+                   }}
+                   transition={{
+                     duration: 8,
+                     delay: i * 0.5,
+                     repeat: Infinity,
+                     ease: "easeInOut",
+                   }}
+                 />
+               ))}
+             </div>
+             
+             {/* Vector illustrations with AnimatePresence for smooth transitions */}
+             <AnimatePresence mode="wait">
+               {slides.map((slide, index) => (
+                 currentIndex === index && (
+                   <motion.div 
+                     key={index} 
+                     className="absolute inset-0 flex items-center justify-center p-4 sm:p-8"
+                     initial={{ opacity: 0, scale: 0.9, rotateY: -10 }}
+                     animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+                     exit={{ opacity: 0, scale: 0.9, rotateY: 10 }}
+                     transition={{ duration: 0.6, ease: "easeOut" }}
+                   >
+                     <slide.Vector isActive={true} typingProgress={typingProgress} />
+                   </motion.div>
+                 )
+               ))}
+             </AnimatePresence>
           </div>
         </div>
       </div>
@@ -416,101 +955,215 @@ const DynamicHeroSection = () => {
         }
         .animate-pulse-slow { animation: pulse-slow 6s infinite; }
 
-        @keyframes ping-slow {
-          0% { transform: scale(1); opacity: 1; }
-          100% { transform: scale(2); opacity: 0; }
+        /* --- Star Twinkle Animations --- */
+        @keyframes star-twinkle-0 {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.3); }
         }
-        .animate-ping-slow { animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite; transform-box: fill-box; transform-origin: center; }
+        @keyframes star-twinkle-1 {
+          0%, 100% { opacity: 0.5; transform: scale(1.1); }
+          50% { opacity: 0.2; transform: scale(0.9); }
+        }
+        @keyframes star-twinkle-2 {
+          0%, 100% { opacity: 0.2; transform: scale(0.8); }
+          50% { opacity: 0.8; transform: scale(1.2); }
+        }
+        @keyframes star-twinkle-3 {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 0.3; transform: scale(1.1); }
+        }
+        @keyframes star-twinkle-4 {
+          0%, 100% { opacity: 0.4; transform: scale(1.05); }
+          50% { opacity: 0.9; transform: scale(0.95); }
+        }
+        .animate-star-twinkle-0 { animation: star-twinkle-0 2s ease-in-out infinite; }
+        .animate-star-twinkle-1 { animation: star-twinkle-1 2.5s ease-in-out infinite; }
+        .animate-star-twinkle-2 { animation: star-twinkle-2 3s ease-in-out infinite; }
+        .animate-star-twinkle-3 { animation: star-twinkle-3 2.2s ease-in-out infinite; }
+        .animate-star-twinkle-4 { animation: star-twinkle-4 2.8s ease-in-out infinite; }
 
-        /* --- Rocket Animations --- */
-        @keyframes draw-path {
-          from { stroke-dashoffset: 1000; }
-          to { stroke-dashoffset: 0; }
+        /* --- Grid Pulse --- */
+        @keyframes grid-pulse {
+          0%, 100% { opacity: 0.05; }
+          50% { opacity: 0.15; }
         }
-        .animate-draw-path { animation: draw-path 3s ease-out forwards; }
+        .animate-grid-pulse { animation: grid-pulse 4s ease-in-out infinite; }
 
-        @keyframes fly-across {
-          0% { transform: translate(50px, 350px) scale(0.5) rotate(-20deg); opacity: 0; }
-          20% { opacity: 1; }
-          100% { transform: translate(450px, 50px) scale(1) rotate(0deg); opacity: 1; }
+        /* --- Planet Animations --- */
+        @keyframes planet-float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
         }
-        .animate-fly-across { animation: fly-across 3s ease-in-out forwards; }
+        .animate-planet-float { animation: planet-float 4s ease-in-out infinite; }
 
-        @keyframes flicker {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(0.9); }
+        @keyframes ring-rotate {
+          from { transform: rotateX(70deg) rotateZ(0deg); }
+          to { transform: rotateX(70deg) rotateZ(360deg); }
         }
-        .animate-flicker { animation: flicker 0.2s infinite; }
+        .animate-ring-rotate { 
+          animation: ring-rotate 10s linear infinite; 
+          transform-origin: center;
+        }
 
-        @keyframes clouds-move {
-          from { transform: translateX(0); opacity: 0; }
-          20% { opacity: 0.8; }
-          to { transform: translateX(-50px); opacity: 0; }
+        @keyframes ring-pulse {
+          0%, 100% { opacity: 0.3; r: 55; }
+          50% { opacity: 0.7; r: 60; }
         }
-        .animate-clouds-move { animation: clouds-move 4s linear infinite; }
+        .animate-ring-pulse { animation: ring-pulse 2s ease-in-out infinite; }
 
-        /* --- Target + Automation Animations --- */
-        @keyframes doc-process {
-          0% { transform: translate(var(--sx, 0), 300px) scale(0.5); opacity: 0; }
-          30% { transform: translate(var(--sx, 0), 100px) scale(1); opacity: 1; }
-          70% { transform: translate(var(--sx, 0), 100px) scale(1); opacity: 1; }
-          100% { transform: translate(350px, 200px) scale(0); opacity: 0; }
+        /* --- Flame Animation --- */
+        @keyframes flame-dance {
+          0%, 100% { transform: scaleY(1) scaleX(1); }
+          25% { transform: scaleY(1.1) scaleX(0.9); }
+          50% { transform: scaleY(0.95) scaleX(1.05); }
+          75% { transform: scaleY(1.08) scaleX(0.92); }
         }
-        .animate-doc-process { 
-          animation: doc-process 2s cubic-bezier(0.4, 0, 0.2, 1) forwards; 
+        .animate-flame-dance { 
+          animation: flame-dance 0.3s ease-in-out infinite; 
+          transform-origin: center top;
         }
-        .animate-doc-process:nth-child(2) { --sx: 80px; }
 
-        @keyframes scanner-move {
-          0% { transform: translateY(100px); opacity: 1; }
-          50% { transform: translateY(180px); opacity: 1; }
-          100% { transform: translateY(100px); opacity: 1; }
+        /* --- Smoke Animation --- */
+        @keyframes smoke {
+          0% { opacity: 0.4; transform: translateY(0) scale(1); }
+          100% { opacity: 0; transform: translateY(30px) scale(1.5); }
         }
-        .animate-scanner { animation: scanner-move 1.5s ease-in-out infinite; animation-delay: 0.5s; }
+        .animate-smoke ellipse { animation: smoke 1.5s ease-out infinite; }
+        .animate-smoke ellipse:nth-child(2) { animation-delay: 0.3s; }
+        .animate-smoke ellipse:nth-child(3) { animation-delay: 0.6s; }
 
-        @keyframes check-appear {
-          0% { transform: scale(0); }
-          80% { transform: scale(1.2); }
-          100% { transform: scale(1); }
+        /* --- Rocket Glow --- */
+        @keyframes rocket-glow {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.2); }
         }
-        .animate-check-appear { animation: check-appear 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; transform-box: fill-box; transform-origin: center; }
+        .animate-rocket-glow { animation: rocket-glow 2s ease-in-out infinite; }
 
-        @keyframes dart-hit {
-          0% { transform: translate(500px, 0) scale(1.5); opacity: 0; }
-          100% { transform: translate(350px, 150px) scale(1); opacity: 1; }
+        /* --- Target Ring Animations --- */
+        @keyframes target-ring-1 {
+          0%, 100% { r: 130; opacity: 0.3; }
+          50% { r: 140; opacity: 0.5; }
         }
-        .animate-dart-hit { animation: dart-hit 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes target-ring-2 {
+          0%, 100% { r: 115; opacity: 0.2; }
+          50% { r: 125; opacity: 0.4; }
+        }
+        .animate-target-ring-1 { animation: target-ring-1 3s ease-in-out infinite; }
+        .animate-target-ring-2 { animation: target-ring-2 3s ease-in-out infinite 0.5s; }
 
-        @keyframes target-pulse {
-          0% { transform: translate(350px, 200px) scale(1); }
-          50% { transform: translate(350px, 200px) scale(1.05); }
-          100% { transform: translate(350px, 200px) scale(1); }
-        }
-        .animate-target-pulse { animation: target-pulse 2s ease-in-out infinite; }
+        /* --- Ripple Animations --- */
+        @keyframes ripple-0 { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.2; } }
+        @keyframes ripple-1 { 0%, 100% { opacity: 0.08; } 50% { opacity: 0.15; } }
+        @keyframes ripple-2 { 0%, 100% { opacity: 0.06; } 50% { opacity: 0.12; } }
+        @keyframes ripple-3 { 0%, 100% { opacity: 0.04; } 50% { opacity: 0.1; } }
+        .animate-ripple-0 { animation: ripple-0 2s ease-in-out infinite; }
+        .animate-ripple-1 { animation: ripple-1 2.5s ease-in-out infinite; }
+        .animate-ripple-2 { animation: ripple-2 3s ease-in-out infinite; }
+        .animate-ripple-3 { animation: ripple-3 3.5s ease-in-out infinite; }
 
-        /* --- Trophy Animations --- */
-        @keyframes trophy-rise {
-          0% { transform: translate(250px, 400px); opacity: 0; }
-          100% { transform: translate(250px, 220px); opacity: 1; }
+        /* --- Confetti Animations --- */
+        @keyframes confetti-0 {
+          0% { transform: translateY(-50px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(450px) rotate(720deg); opacity: 0; }
         }
-        .animate-trophy-rise { animation: trophy-rise 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        @keyframes confetti-1 {
+          0% { transform: translateY(-30px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(430px) rotate(-540deg); opacity: 0; }
+        }
+        @keyframes confetti-2 {
+          0% { transform: translateY(-40px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(440px) rotate(360deg); opacity: 0; }
+        }
+        @keyframes confetti-3 {
+          0% { transform: translateY(-60px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(460px) rotate(-720deg); opacity: 0; }
+        }
+        @keyframes confetti-4 {
+          0% { transform: translateY(-25px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(425px) rotate(540deg); opacity: 0; }
+        }
+        @keyframes confetti-5 {
+          0% { transform: translateY(-45px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(445px) rotate(-360deg); opacity: 0; }
+        }
+        .animate-confetti-0 { animation: confetti-0 3s linear infinite; }
+        .animate-confetti-1 { animation: confetti-1 3.5s linear infinite; }
+        .animate-confetti-2 { animation: confetti-2 2.8s linear infinite; }
+        .animate-confetti-3 { animation: confetti-3 3.2s linear infinite; }
+        .animate-confetti-4 { animation: confetti-4 2.6s linear infinite; }
+        .animate-confetti-5 { animation: confetti-5 3.8s linear infinite; }
 
-        @keyframes cert-float {
-          0% { transform: translate(80px, 200px) rotate(-20deg); opacity: 0; }
-          100% { transform: translate(120px, 180px) rotate(-10deg); opacity: 1; }
+        /* --- Ray Animations --- */
+        @keyframes ray-0 {
+          0%, 100% { opacity: 0.1; }
+          50% { opacity: 0.3; }
         }
-        .animate-cert-float { animation: cert-float 1s ease-out forwards; animation-delay: 0.5s; }
+        @keyframes ray-1 {
+          0%, 100% { opacity: 0.15; }
+          50% { opacity: 0.25; }
+        }
+        @keyframes ray-2 {
+          0%, 100% { opacity: 0.08; }
+          50% { opacity: 0.2; }
+        }
+        .animate-ray-0 { animation: ray-0 2s ease-in-out infinite; }
+        .animate-ray-1 { animation: ray-1 2.5s ease-in-out infinite; }
+        .animate-ray-2 { animation: ray-2 3s ease-in-out infinite; }
 
-        @keyframes confetti-rain {
-          0% { transform: translateY(-50px); opacity: 1; }
-          100% { transform: translateY(400px); opacity: 0; }
+        /* --- Star Spin --- */
+        @keyframes star-spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
-        .animate-confetti-rain rect, .animate-confetti-rain circle {
-          animation: confetti-rain 3s linear infinite;
+        .animate-star-spin { animation: star-spin 20s linear infinite; }
+
+        /* --- Floating Particle Animations --- */
+        @keyframes float-particle-0 {
+          0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
+          50% { transform: translateY(-20px) translateX(10px); opacity: 0.6; }
         }
-        .animate-confetti-rain rect:nth-child(2n) { animation-duration: 2.5s; animation-delay: 0.2s; }
-        .animate-confetti-rain rect:nth-child(3n) { animation-duration: 3.5s; animation-delay: 0.5s; }
+        @keyframes float-particle-1 {
+          0%, 100% { transform: translateY(0) translateX(0); opacity: 0.4; }
+          50% { transform: translateY(-15px) translateX(-8px); opacity: 0.7; }
+        }
+        @keyframes float-particle-2 {
+          0%, 100% { transform: translateY(0) translateX(0); opacity: 0.2; }
+          50% { transform: translateY(-25px) translateX(5px); opacity: 0.5; }
+        }
+        @keyframes float-particle-3 {
+          0%, 100% { transform: translateY(0) translateX(0); opacity: 0.35; }
+          50% { transform: translateY(-18px) translateX(-12px); opacity: 0.65; }
+        }
+        .animate-float-particle-0 { animation: float-particle-0 4s ease-in-out infinite; }
+        .animate-float-particle-1 { animation: float-particle-1 5s ease-in-out infinite; }
+        .animate-float-particle-2 { animation: float-particle-2 4.5s ease-in-out infinite; }
+        .animate-float-particle-3 { animation: float-particle-3 5.5s ease-in-out infinite; }
       `}</style>
+
+      {/* Anonymous Dream chat entry (floating, center-bottom) */}
+      <div className="fixed left-1/2 -translate-x-1/2 bottom-4 sm:bottom-6 z-50 w-[calc(100%-2rem)] max-w-2xl">
+        <form onSubmit={handleDreamSubmit} aria-label="Dream chat entry" className="w-full">
+          <div className="rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xl px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <input
+                value={dreamPrompt}
+                onChange={(e) => setDreamPrompt(e.target.value)}
+                placeholder="Ask anything…"
+                className="flex-1 bg-transparent text-sm sm:text-base text-slate-900 placeholder:text-slate-400 outline-none"
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-slate-500 text-center">
+            No signup required. We’ll keep the last 4 messages here.
+          </p>
+        </form>
+      </div>
     </section>
   );
 };

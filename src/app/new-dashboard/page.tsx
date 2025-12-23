@@ -681,7 +681,7 @@ export default function NewDashboardPage() {
                           content: m.content,
                           sources: role === "ai" ? (m.sources ?? undefined) : undefined,
                           agentsInvolved: role === "ai" ? (m.agentsInvolved ?? undefined) : undefined,
-                          progress: role === "ai" && m.progress ? (m.progress as any) : undefined,
+                          progress: role === "ai" && m.progress ? (m.progress as ChatMessage['progress']) : undefined,
                           documentDraft: role === "ai" ? (m.documentDraft ?? undefined) : undefined,
                           action: role === "ai" ? (m.action ?? undefined) : undefined,
                           documentType: role === "ai" ? docType : null,

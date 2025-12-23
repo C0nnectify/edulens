@@ -95,7 +95,7 @@ const HowItWorks = () => {
         {/* CTA */}
         <div className="text-center mt-16">
           <Link
-            href="/roadmap"
+            href="/roadmap/dream"
             className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-8 py-4 rounded-full font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-200"
           >
             Get The Roadmap
