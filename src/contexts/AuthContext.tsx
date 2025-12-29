@@ -13,7 +13,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (name: string, email: string, password: string) => Promise<boolean>;
+  signup: (name: string, email: string, password: string, skipRedirect?: boolean) => Promise<boolean>;
   logout: () => Promise<void>;
   loading: boolean;
 }
@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (name: string, email: string, password: string): Promise<boolean> => {
+  const signup = async (name: string, email: string, password: string, skipRedirect: boolean = false): Promise<boolean> => {
     try {
       const result = await signUp.email({
         email,
@@ -65,7 +65,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (result.data) {
-        router.push('/new-dashboard');
+        if (!skipRedirect) {
+          router.push('/new-dashboard');
+        }
         return true;
       }
       return false;

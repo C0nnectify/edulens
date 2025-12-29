@@ -3,6 +3,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import logging
 import uuid
+import json
+import re
 
 from app.services.roadmap_service import roadmap_service
 
@@ -17,9 +19,19 @@ class DreamChatRequest(BaseModel):
     recent_messages: Optional[List[dict]] = Field(default_factory=list)  # [{role: user|ai, content: str}]
 
 
+class RoadmapStage(BaseModel):
+    order: int
+    title: str
+    description: str
+
+
 class DreamChatResponse(BaseModel):
     session_id: str
     answer: str
+    # Structured data for timeline rendering
+    reflection: Optional[str] = None
+    roadmap_stages: Optional[List[RoadmapStage]] = None
+    next_question: Optional[str] = None
 
 
 def _normalize_recent_messages(raw: Optional[List[dict]]) -> list[dict]:
@@ -110,9 +122,8 @@ async def post_dream_message(
         "- Ask at most ONE clarifying question per turn.\n"
         "- Do NOT mention tools, APIs, or internal system details.\n"
         "- Do NOT request document uploads.\n"
-        "- Output Markdown only. Use headings and blank lines for readability.\n"
-        "- For the roadmap preview, use a numbered list with one stage per line.\n"
-        "- Use the Dream Mode stages as the backbone milestones (do not invent a completely different taxonomy).\n\n"
+        "- Use the Dream Mode stages as the backbone milestones (do not invent a completely different taxonomy).\n"
+        "- Select 5-7 most relevant stages from the backbone.\n\n"
         f"Dream Mode Stages (backbone):\n{stage_block}\n"
     )
 
@@ -120,17 +131,62 @@ async def post_dream_message(
         (f"{recent_block}\n\n" if recent_block else "")
         + "User message:\n"
         + f"{req.message.strip()}\n\n"
-        + "Return exactly this Markdown structure:\n\n"
-        + "### Reflection\n"
-        + "(1-2 sentences)\n\n"
-        + "### Roadmap Preview (Dream Mode stages)\n"
-        + "1. **<Stage name>** — <what to do>\n"
-        + "2. **<Stage name>** — <what to do>\n"
-        + "... (5-7 items total; each on its own line)\n\n"
-        + "### Next Question\n"
-        + "Ask exactly ONE clarifying question.\n"
+        + "Return your response as valid JSON with this exact structure:\n"
+        + '{\n'
+        + '  "reflection": "1-2 motivating sentences about their dream",\n'
+        + '  "roadmap_stages": [\n'
+        + '    {"order": 1, "title": "Stage Title", "description": "Specific action for this stage"},\n'
+        + '    {"order": 2, "title": "Stage Title", "description": "Specific action for this stage"}\n'
+        + '  ],\n'
+        + '  "next_question": "One clarifying question to help refine their roadmap"\n'
+        + '}\n\n'
+        + "Return ONLY the JSON object, no markdown formatting or code blocks."
     )
 
-    answer = _llm_chat(system_prompt, user_prompt)
+    raw_answer = _llm_chat(system_prompt, user_prompt)
 
-    return DreamChatResponse(session_id=session_id, answer=answer)
+    # Parse the JSON response and build structured data
+    reflection = None
+    roadmap_stages = None
+    next_question = None
+
+    try:
+        # Try to extract JSON from the response
+        json_match = re.search(r'\{[\s\S]*\}', raw_answer)
+        if json_match:
+            parsed = json.loads(json_match.group())
+            reflection = parsed.get("reflection")
+            next_question = parsed.get("next_question")
+
+            stages_data = parsed.get("roadmap_stages", [])
+            if stages_data:
+                roadmap_stages = [
+                    RoadmapStage(
+                        order=s.get("order", idx + 1),
+                        title=s.get("title", f"Stage {idx + 1}"),
+                        description=s.get("description", "")
+                    )
+                    for idx, s in enumerate(stages_data)
+                ]
+    except (json.JSONDecodeError, Exception) as e:
+        logger.warning(f"Failed to parse JSON response: {e}")
+
+    # Build markdown answer for backward compatibility
+    answer_parts = []
+    if reflection:
+        answer_parts.append(f"### Reflection\n{reflection}")
+    if roadmap_stages:
+        stage_lines = [f"{s.order}. **{s.title}** — {s.description}" for s in roadmap_stages]
+        answer_parts.append(f"### Roadmap Preview\n" + "\n".join(stage_lines))
+    if next_question:
+        answer_parts.append(f"### Next Question\n{next_question}")
+
+    answer = "\n\n".join(answer_parts) if answer_parts else raw_answer
+
+    return DreamChatResponse(
+        session_id=session_id,
+        answer=answer,
+        reflection=reflection,
+        roadmap_stages=roadmap_stages,
+        next_question=next_question
+    )

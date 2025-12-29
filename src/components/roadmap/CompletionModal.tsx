@@ -42,14 +42,16 @@ export function CompletionModal({ isOpen, onClose }: CompletionModalProps) {
 
   const handleRealityMode = () => {
     if (user) {
+      // User is authenticated, go directly to Reality mode
       router.push("/roadmap?mode=reality");
     } else {
-      router.push("/signin?redirect=/roadmap?mode=reality");
+      // Navigate to signup with dream flow
+      router.push("/signup?from=dream");
     }
   };
 
   const handleSignUp = () => {
-    router.push("/signup?redirect=/roadmap?mode=reality");
+    router.push("/signup?from=dream");
   };
 
   return (
@@ -111,16 +113,16 @@ export function CompletionModal({ isOpen, onClose }: CompletionModalProps) {
               </p>
             </div>
 
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100">
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6 border border-emerald-100">
               <h4 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-indigo-600" />
+                <Sparkles className="w-5 h-5 text-emerald-600" />
                 Ready to Make It Real?
               </h4>
               <p className="text-sm text-slate-700 leading-relaxed">
-                EduLens Reality Mode turns this roadmap into your
-                personalized plan. Get AI-powered tracking, task
-                management, document generation, and deadline reminders
-                tailored to your actual profile and goals.
+                EduLens turns this roadmap into your personalized plan with 
+                <span className="font-medium text-emerald-700"> 3 smart scenarios</span>: 
+                Dream (ideal), Reality (based on your current situation), and 
+                Future (best-case). Get AI-powered tracking, timelines, and guidance.
               </p>
             </div>
 
@@ -128,9 +130,9 @@ export function CompletionModal({ isOpen, onClose }: CompletionModalProps) {
             <div className="space-y-3">
               <Button
                 onClick={handleRealityMode}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all group"
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all group"
               >
-                <span>Start Reality Mode</span>
+                <span>Proceed to Reality ✨</span>
                 <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
               </Button>
 
@@ -138,10 +140,10 @@ export function CompletionModal({ isOpen, onClose }: CompletionModalProps) {
                 <Button
                   onClick={handleSignUp}
                   variant="outline"
-                  className="w-full py-6 text-lg rounded-xl border-2 border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 transition-all group"
+                  className="w-full py-6 text-lg rounded-xl border-2 border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 transition-all group"
                 >
                   <UserPlus className="w-5 h-5 mr-2" />
-                  <span>Sign Up to Get Started</span>
+                  <span>Sign Up to Save Progress</span>
                 </Button>
               )}
 

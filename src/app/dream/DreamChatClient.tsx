@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles } from 'lucide-react';
 import { MarkdownContent } from '@/components/chat/MarkdownContent';
+import { DreamTimeline, type RoadmapStage } from '@/components/dream/DreamTimeline';
 
 type Role = 'user' | 'ai';
 
@@ -13,6 +14,10 @@ type DreamMessage = {
   role: Role;
   content: string;
   ts: number;
+  // Structured data for timeline
+  reflection?: string;
+  roadmap_stages?: RoadmapStage[];
+  next_question?: string;
 };
 
 type DreamStateV1 = {
@@ -94,7 +99,13 @@ async function postDreamMessage(params: {
     throw new Error(msg);
   }
 
-  return (await res.json()) as { session_id: string; answer: string };
+  return (await res.json()) as {
+    session_id: string;
+    answer: string;
+    reflection?: string;
+    roadmap_stages?: RoadmapStage[];
+    next_question?: string;
+  };
 }
 
 export default function DreamChatClient() {
@@ -162,6 +173,9 @@ export default function DreamChatClient() {
         role: 'ai',
         content: resp.answer,
         ts: Date.now(),
+        reflection: resp.reflection,
+        roadmap_stages: resp.roadmap_stages,
+        next_question: resp.next_question,
       };
 
       setState((prev) => {
@@ -218,36 +232,61 @@ export default function DreamChatClient() {
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
           {state.messages.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-slate-700 shadow-sm">
-              Tell me your dream: where you want to study, what you want to become, and your ideal timeline.
+            <div className="rounded-2xl bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-100 p-6 shadow-sm">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg">
+                  <Sparkles className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 mb-2">Share Your Dream</h2>
+                  <p className="text-slate-700 leading-relaxed">
+                    Tell me your dream: where you want to study, what you want to become, and your ideal timeline.
+                    I&apos;ll create a personalized roadmap just for you.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : null}
 
           {state.messages.map((m) => (
             <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-              <div
-                className={
-                  m.role === 'user'
-                    ? 'max-w-[90%] rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm leading-relaxed shadow-sm'
-                    : 'max-w-[90%] rounded-2xl border border-slate-200 bg-white text-slate-900 px-4 py-3 text-sm leading-relaxed shadow-sm'
-                }
-              >
-                {m.role === 'ai' ? (
-                  <MarkdownContent
-                    content={m.content}
-                    className="prose-slate prose-headings:mt-4 prose-headings:mb-2 prose-p:my-3 prose-ol:my-3 prose-ul:my-3"
-                  />
-                ) : (
-                  m.content
-                )}
-              </div>
+              {m.role === 'user' ? (
+                <div className="max-w-[85%] rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white px-5 py-3 text-sm leading-relaxed shadow-md">
+                  {m.content}
+                </div>
+              ) : (
+                <div className="w-full max-w-[95%]">
+                  {/* Check if we have structured timeline data */}
+                  {m.roadmap_stages && m.roadmap_stages.length > 0 ? (
+                    <DreamTimeline
+                      reflection={m.reflection}
+                      stages={m.roadmap_stages}
+                      nextQuestion={m.next_question}
+                      sessionId={state.sessionId}
+                    />
+                  ) : (
+                    /* Fallback to markdown rendering */
+                    <div className="rounded-2xl border border-slate-200 bg-white text-slate-900 px-5 py-4 text-sm leading-relaxed shadow-sm">
+                      <MarkdownContent
+                        content={m.content}
+                        className="prose-slate prose-headings:mt-4 prose-headings:mb-2 prose-p:my-3 prose-ol:my-3 prose-ul:my-3"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
 
           {busy ? (
             <div className="flex justify-start">
-              <div className="max-w-[85%] rounded-2xl border border-slate-200 bg-white text-slate-500 px-4 py-3 text-sm">
-                Thinking…
+              <div className="rounded-2xl border border-slate-200 bg-white text-slate-500 px-5 py-4 text-sm flex items-center gap-3">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+                <span>Creating your roadmap…</span>
               </div>
             </div>
           ) : null}
@@ -262,14 +301,14 @@ export default function DreamChatClient() {
         </div>
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
+      <footer className="border-t border-slate-200 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto max-w-3xl px-4 py-4">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void send(input);
             }}
-            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-shadow focus-within:ring-2 focus-within:ring-indigo-200 focus-within:border-indigo-300"
           >
             <input
               value={input}
@@ -281,12 +320,12 @@ export default function DreamChatClient() {
             <button
               type="submit"
               disabled={busy || !input.trim()}
-              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-slate-900 transition-colors"
+              className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 px-4 py-2 text-sm font-semibold text-white hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 disabled:hover:from-indigo-500 disabled:hover:to-purple-500 transition-all shadow-md"
             >
               <Send className="h-4 w-4" />
             </button>
           </form>
-          <div className="mt-2 text-xs text-slate-500">We store only the last 4 message pairs in this browser.</div>
+          <div className="mt-2 text-center text-xs text-slate-500">We store only the last 4 message pairs in this browser.</div>
         </div>
       </footer>
     </div>
