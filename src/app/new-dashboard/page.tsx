@@ -7,11 +7,13 @@ import {
   ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Loader2, 
   Trash2, Rocket, ArrowRight, Target, CheckCircle2,
   Map, Send, Upload, Activity, ListChecks, PanelRightOpen,
+  User, Settings, LogOut,
   type LucideIcon 
 } from "lucide-react";
 import { listSessions, renameSession, deleteSession, DocumentType } from "@/lib/api/chatOrchestrator";
 import { FullPageJourney } from "@/components/dashboard/FullPageJourney";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSession, signOut } from "@/lib/auth-client";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +48,7 @@ const documentTypeOptions: Array<{ key: DocumentType | 'analyze'; label: string;
 
 // Quick Access links for right sidebar
 const quickLinks: Array<{ title: string; href: string; icon: LucideIcon; gradient: string }> = [
+  { title: 'My Profile', href: '/new-dashboard/profile', icon: User, gradient: 'from-violet-500 to-purple-600' },
   { title: 'Document Vault', href: '/dashboard/document-ai', icon: Upload, gradient: 'from-blue-500 to-indigo-600' },
   { title: 'SOP Generator', href: '/dashboard/document-builder/sop-generator', icon: FileText, gradient: 'from-purple-500 to-pink-600' },
   { title: 'LOR Generator', href: '/dashboard/document-builder/lor-generator', icon: FileText, gradient: 'from-violet-500 to-purple-600' },
@@ -147,8 +150,10 @@ type ViewMode = 'journey' | 'chat';
 function NewDashboardInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { data: session } = useSession();
   const [showWelcome, setShowWelcome] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('journey');
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   
   // Chat input state (simplified - redirects to chat page on send)
   const [selectedTool, setSelectedTool] = useState<FeatureKey>("document_builder");
@@ -169,6 +174,18 @@ function NewDashboardInner() {
 
   const documentTypeDropdownRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close profile menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Check for welcome parameter
   useEffect(() => {
@@ -271,14 +288,13 @@ function NewDashboardInner() {
 
   // Handle starting chat from journey
   const handleStartChatFromJourney = useCallback((context?: string) => {
-    if (context) {
-      const chatContext = {
-        message: context,
-        tool: null,
-        documentType: null,
-      };
-      sessionStorage.setItem('pendingChatMessage', JSON.stringify(chatContext));
-    }
+    const chatContext = {
+      message: context || '',
+      tool: null,
+      documentType: null,
+      isJourneyContext: true, // Always use Journey mode from Journey view
+    };
+    sessionStorage.setItem('pendingChatMessage', JSON.stringify(chatContext));
     router.push('/new-dashboard/chat/new');
   }, [router]);
 
@@ -406,6 +422,73 @@ function NewDashboardInner() {
                 No chats yet. Start a new conversation!
               </div>
             )}
+          </div>
+        </div>
+
+        {/* User Profile Section */}
+        <div className="p-3 border-t border-gray-100" ref={profileMenuRef}>
+          <div className="relative">
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-all group"
+            >
+              {/* Avatar */}
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm flex-shrink-0">
+                {session?.user?.name?.charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {session?.user?.name || 'User'}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  {session?.user?.email || ''}
+                </p>
+              </div>
+              <ChevronDown size={16} className={`text-gray-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            <AnimatePresence>
+              {showProfileMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-50"
+                >
+                  <div className="p-1">
+                    <Link
+                      href="/new-dashboard/profile"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
+                      onClick={() => setShowProfileMenu(false)}
+                    >
+                      <User size={16} className="text-gray-500" />
+                      <span className="text-sm text-gray-700">My Profile</span>
+                    </Link>
+                    <Link
+                      href="/settings"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
+                      onClick={() => setShowProfileMenu(false)}
+                    >
+                      <Settings size={16} className="text-gray-500" />
+                      <span className="text-sm text-gray-700">Settings</span>
+                    </Link>
+                    <div className="my-1 border-t border-gray-100" />
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        signOut({ fetchOptions: { onSuccess: () => router.push('/signin') } });
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 transition-colors text-left"
+                    >
+                      <LogOut size={16} className="text-red-500" />
+                      <span className="text-sm text-red-600">Sign Out</span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </aside>

@@ -12,10 +12,11 @@ export type FileAttachment = {
 export type SendMessageParams = {
   sessionId?: string;
   message: string;
-  feature: "document_builder" | "tracker" | "monitoring_agent" | "analysis" | "roadmap" | "general";
+  feature: "document_builder" | "tracker" | "monitoring_agent" | "analysis" | "roadmap" | "journey" | "general";
   documentType?: DocumentType;  // For document_builder feature
   attachmentIds?: string[];  // IDs of previously uploaded files to include
   generateDraft?: boolean; // When true, backend should generate a document draft (no auto-generation).
+  isJourneyContext?: boolean; // When true, use Journey mode for roadmap-focused conversations
 };
 
 export type DocumentProgress = {
@@ -66,6 +67,32 @@ export async function sendMessage(params: SendMessageParams): Promise<ChatRespon
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error(`Failed: ${res.status}`);
+  return res.json();
+}
+
+// Journey mode chat - roadmap-focused conversations
+export type JourneyAction = {
+  type: string;
+  target: string;
+  details: Record<string, unknown>;
+};
+
+export type JourneyChatResponse = {
+  response: string;
+  actions: JourneyAction[];
+  roadmap_updates?: Record<string, unknown>;
+  profile_updates?: Record<string, unknown>;
+  session_id: string;
+};
+
+export async function sendJourneyMessage(message: string, sessionId?: string): Promise<JourneyChatResponse> {
+  const res = await fetch('/api/journey/chat', {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ message, session_id: sessionId }),
   });
   if (!res.ok) throw new Error(`Failed: ${res.status}`);
   return res.json();

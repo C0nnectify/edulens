@@ -6,9 +6,9 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   Upload, Mic, Sparkles, FileText, Search, Paperclip, ChevronRight, Plus, Menu, 
   X, ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Check, AlertCircle, 
-  Loader2, File, Image, FileSpreadsheet, Trash2, ArrowLeft, type LucideIcon 
+  Loader2, File, Image, FileSpreadsheet, Trash2, ArrowLeft, Map, type LucideIcon 
 } from "lucide-react";
-import { sendMessage, uploadFile, getUserFiles, getHistory, DocumentType, FileAttachment } from "@/lib/api/chatOrchestrator";
+import { sendMessage, sendJourneyMessage, uploadFile, getUserFiles, getHistory, DocumentType, FileAttachment } from "@/lib/api/chatOrchestrator";
 import { MarkdownContent } from "@/components/chat/MarkdownContent";
 import { motion } from "framer-motion";
 
@@ -76,6 +76,7 @@ function ChatPageInner() {
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [pendingMessageProcessed, setPendingMessageProcessed] = useState(false);
+  const [isJourneyMode, setIsJourneyMode] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const documentTypeDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -98,6 +99,10 @@ function ChatPageInner() {
           }
           if (pending.documentType) {
             setSelectedDocumentType(pending.documentType);
+          }
+          // Check for Journey mode
+          if (pending.isJourneyContext) {
+            setIsJourneyMode(true);
           }
           sessionStorage.removeItem('pendingChatMessage');
         } catch (e) {
@@ -265,7 +270,8 @@ function ChatPageInner() {
   const onSend = useCallback(async () => {
     if (!input.trim()) return;
     
-    if (selectedTool === "document_builder" && !selectedDocumentType) {
+    // Skip document type check for Journey mode
+    if (!isJourneyMode && selectedTool === "document_builder" && !selectedDocumentType) {
       setMessages(prev => [...prev, { id: `hint-${Date.now()}`, role: "ai", content: "Please select a document type first." }]);
       return;
     }
@@ -298,51 +304,86 @@ function ChatPageInner() {
     setIsSending(true);
     
     try {
-      const currentSessionId = sessionId === 'new' ? undefined : sessionId;
-      const res = await sendMessage({
-        sessionId: currentSessionId,
-        message: text,
-        feature: selectedTool === "document_builder" ? "document_builder" : "general",
-        documentType: selectedTool === "document_builder" && selectedDocumentType !== 'analyze' ? selectedDocumentType : undefined,
-        attachmentIds: selectedFileIds,
-        generateDraft: wantsGenerateDraft,
-      });
-      
-      // If this was a new chat, redirect to the actual session
-      if (sessionId === 'new' && res.sessionId) {
-        router.replace(`/new-dashboard/chat/${res.sessionId}`);
-      }
-
-      let draftKey: string | undefined;
-      if (typeof window !== "undefined" && res.documentDraft && selectedDocumentType !== 'analyze') {
-        try {
-          draftKey = `docbuilder-draft-${res.sessionId}-${Date.now()}`;
-          window.localStorage.setItem(draftKey, JSON.stringify({ documentType: selectedDocumentType, documentDraft: res.documentDraft }));
-        } catch (e) {
-          console.error("Failed to persist draft", e);
+      // Handle Journey mode differently
+      if (isJourneyMode) {
+        const currentSessionId = sessionId === 'new' ? undefined : sessionId;
+        const journeyRes = await sendJourneyMessage(text, currentSessionId);
+        
+        // If this was a new chat, redirect to the actual session
+        if (sessionId === 'new' && journeyRes.session_id) {
+          router.replace(`/new-dashboard/chat/${journeyRes.session_id}`);
         }
+        
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          role: "ai",
+          content: journeyRes.response || "",
+        };
+        setMessages(prev => [...prev, aiMsg]);
+        
+        // Show update notifications if any
+        if (journeyRes.roadmap_updates && Object.keys(journeyRes.roadmap_updates).length > 0) {
+          setMessages(prev => [...prev, { 
+            id: `system-${Date.now()}`, 
+            role: "ai", 
+            content: "✅ Your roadmap has been updated based on our conversation."
+          }]);
+        }
+        if (journeyRes.profile_updates && Object.keys(journeyRes.profile_updates).length > 0) {
+          setMessages(prev => [...prev, { 
+            id: `system-${Date.now()}`, 
+            role: "ai", 
+            content: "✅ Your profile has been updated with new information."
+          }]);
+        }
+      } else {
+        // Standard document builder flow
+        const currentSessionId = sessionId === 'new' ? undefined : sessionId;
+        const res = await sendMessage({
+          sessionId: currentSessionId,
+          message: text,
+          feature: selectedTool === "document_builder" ? "document_builder" : "general",
+          documentType: selectedTool === "document_builder" && selectedDocumentType !== 'analyze' ? selectedDocumentType : undefined,
+          attachmentIds: selectedFileIds,
+          generateDraft: wantsGenerateDraft,
+        });
+        
+        // If this was a new chat, redirect to the actual session
+        if (sessionId === 'new' && res.sessionId) {
+          router.replace(`/new-dashboard/chat/${res.sessionId}`);
+        }
+
+        let draftKey: string | undefined;
+        if (typeof window !== "undefined" && res.documentDraft && selectedDocumentType !== 'analyze') {
+          try {
+            draftKey = `docbuilder-draft-${res.sessionId}-${Date.now()}`;
+            window.localStorage.setItem(draftKey, JSON.stringify({ documentType: selectedDocumentType, documentDraft: res.documentDraft }));
+          } catch (e) {
+            console.error("Failed to persist draft", e);
+          }
+        }
+        
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          role: "ai",
+          content: res.answer || "",
+          sources: res.sources,
+          agentsInvolved: res.agentsInvolved,
+          progress: res.progress,
+          documentDraft: res.documentDraft,
+          action: res.action,
+          documentType: selectedDocumentType !== 'analyze' ? selectedDocumentType as DocumentType : null,
+          draftKey,
+        };
+        setMessages(prev => [...prev, aiMsg]);
       }
-      
-      const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        role: "ai",
-        content: res.answer || "",
-        sources: res.sources,
-        agentsInvolved: res.agentsInvolved,
-        progress: res.progress,
-        documentDraft: res.documentDraft,
-        action: res.action,
-        documentType: selectedDocumentType !== 'analyze' ? selectedDocumentType as DocumentType : null,
-        draftKey,
-      };
-      setMessages(prev => [...prev, aiMsg]);
     } catch (err) {
       console.error(err);
       setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "ai", content: "Something went wrong. Please try again." }]);
     } finally {
       setIsSending(false);
     }
-  }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles, previousFiles, router]);
+  }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles, previousFiles, router, isJourneyMode]);
 
   if (isLoadingHistory) {
     return (
@@ -361,10 +402,21 @@ function ChatPageInner() {
             <ArrowLeft size={20} className="text-gray-600" />
           </Link>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-violet-600 rounded-lg flex items-center justify-center">
-              <Sparkles size={16} className="text-white" />
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+              isJourneyMode 
+                ? 'bg-gradient-to-br from-emerald-500 to-teal-500' 
+                : 'bg-gradient-to-br from-blue-600 to-violet-600'
+            }`}>
+              {isJourneyMode ? <Map size={16} className="text-white" /> : <Sparkles size={16} className="text-white" />}
             </div>
-            <span className="font-semibold text-gray-900">Chat</span>
+            <span className="font-semibold text-gray-900">
+              {isJourneyMode ? 'Journey Chat' : 'Chat'}
+            </span>
+            {isJourneyMode && (
+              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
+                Roadmap Mode
+              </span>
+            )}
           </div>
         </header>
 
@@ -462,7 +514,8 @@ function ChatPageInner() {
         {/* Input Area */}
         <div className="bg-white border-t border-gray-200 p-4">
           <div className="max-w-3xl mx-auto">
-            {/* Tool/Type Chips */}
+            {/* Tool/Type Chips - Hidden in Journey Mode */}
+            {!isJourneyMode && (
             <div className="mb-3 flex items-center gap-2 flex-wrap">
               {selectedTool && (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-sm">
@@ -514,9 +567,10 @@ function ChatPageInner() {
                 </div>
               )}
             </div>
+            )}
             
-            {/* File Chips */}
-            {(uploadedFiles.length > 0 || selectedFileIds.length > 0) && (
+            {/* File Chips - Hidden in Journey Mode */}
+            {!isJourneyMode && (uploadedFiles.length > 0 || selectedFileIds.length > 0) && (
               <div className="mb-3 flex flex-wrap gap-2">
                 {uploadedFiles.map((file, idx) => {
                   const FileIcon = getFileIcon(file.type);
@@ -538,12 +592,16 @@ function ChatPageInner() {
             
             {/* Input */}
             <div className="bg-gray-50 border border-gray-200 rounded-2xl flex items-center gap-2 p-2 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100">
-              <button onClick={() => setShowFilePanel(!showFilePanel)} data-file-trigger className="text-gray-400 hover:text-blue-600 p-2 rounded-xl hover:bg-white">
-                <Plus size={20} />
-              </button>
-              <button onClick={onUploadClick} className="text-gray-400 hover:text-blue-600 p-2 rounded-xl hover:bg-white">
-                <Paperclip size={20} />
-              </button>
+              {!isJourneyMode && (
+                <>
+                  <button onClick={() => setShowFilePanel(!showFilePanel)} data-file-trigger className="text-gray-400 hover:text-blue-600 p-2 rounded-xl hover:bg-white">
+                    <Plus size={20} />
+                  </button>
+                  <button onClick={onUploadClick} className="text-gray-400 hover:text-blue-600 p-2 rounded-xl hover:bg-white">
+                    <Paperclip size={20} />
+                  </button>
+                </>
+              )}
               <textarea
                 ref={chatInputRef}
                 value={input}
@@ -567,8 +625,8 @@ function ChatPageInner() {
               <input ref={fileInputRef} type="file" className="hidden" onChange={onFileSelected} multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" />
             </div>
             
-            {/* File Panel */}
-            {showFilePanel && selectedTool === "document_builder" && (
+            {/* File Panel - Hidden in Journey Mode */}
+            {!isJourneyMode && showFilePanel && selectedTool === "document_builder" && (
               <div ref={filePanelRef} className="mt-3 border border-gray-200 rounded-xl p-4 bg-white">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-bold text-gray-500 uppercase">Your Files</span>

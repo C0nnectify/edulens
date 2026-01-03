@@ -14,7 +14,7 @@ import logging
 
 from app.core.config import settings
 from app.core.chroma_client import chroma_manager
-from app.api.v1 import vector_store, resume, cv, sop, tracker, research, agents, documents, embeddings, ocr, search, query, health, faculty, sop_analysis, admission, gradcafe_collection, model_training, sop_generator, sop_templates, sop_upload, roadmap, files, analyzer, dream_chat
+from app.api.v1 import vector_store, resume, cv, sop, tracker, research, agents, documents, embeddings, ocr, search, query, health, faculty, sop_analysis, admission, gradcafe_collection, model_training, sop_generator, sop_templates, sop_upload, roadmap, files, analyzer, dream_chat, smart_profile, journey
 from app.SOP_Generator.routes import sop as sop_gen_routes
 from app.api.v2 import multi_agent
 from app.api import documents_processing
@@ -177,6 +177,12 @@ app.include_router(documents_processing.router, tags=["Document Processing"])
 # Include Document Builder Chat API
 from app.api.v1.document_builder_chat import router as document_builder_chat_router
 app.include_router(document_builder_chat_router, prefix="/api/v1", tags=["Document Builder Chat"])
+
+# Include SmartProfile API
+app.include_router(smart_profile.router, prefix="/api/v1", tags=["SmartProfile"])
+
+# Include Journey API (Roadmap-focused chat)
+app.include_router(journey.router, prefix="/api/v1", tags=["Journey Chat"])
 
 # Include routers - V2 APIs (Multi-Agent System)
 app.include_router(multi_agent.router, prefix="/api/v2/multi-agent", tags=["Multi-Agent System"])

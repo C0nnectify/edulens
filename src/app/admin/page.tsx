@@ -2,7 +2,7 @@
 
 import { useSession } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Users,
   FileText,
@@ -12,15 +12,48 @@ import {
   Shield,
   UserCog,
   Database,
+  RefreshCw,
+  Activity,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
+interface Stats {
+  collections: Record<string, number>;
+  usersByRole: Record<string, number>;
+  overview: {
+    totalUsers: number;
+    recentSignups: number;
+    activeSessions: number;
+    usersWithProfiles: number;
+    usersWithSmartProfiles: number;
+    totalDocuments: number;
+  };
+}
+
 export default function AdminDashboard() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+
+  // Fetch real stats from API
+  const fetchStats = useCallback(async () => {
+    setIsLoadingStats(true);
+    try {
+      const response = await fetch('/api/admin/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -32,9 +65,10 @@ export default function AdminDashboard() {
         router.push('/dashboard');
       } else {
         setIsAuthorized(true);
+        fetchStats();
       }
     }
-  }, [session, isPending, router]);
+  }, [session, isPending, router, fetchStats]);
 
   if (isPending) {
     return (
@@ -51,35 +85,36 @@ export default function AdminDashboard() {
     return null;
   }
 
-  const stats = [
+  // Dynamic stats from API
+  const displayStats = [
     {
       title: 'Total Users',
-      value: '1,234',
-      change: '+12.5%',
+      value: stats?.overview.totalUsers.toLocaleString() || '-',
+      change: `+${stats?.overview.recentSignups || 0} this week`,
       icon: Users,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
-      title: 'Documents Generated',
-      value: '5,678',
-      change: '+23.1%',
+      title: 'Total Documents',
+      value: stats?.overview.totalDocuments.toLocaleString() || '-',
+      change: 'All user docs',
       icon: FileText,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
     },
     {
-      title: 'Chat Sessions',
-      value: '12,345',
-      change: '+18.2%',
-      icon: MessageSquare,
+      title: 'Active Sessions',
+      value: stats?.overview.activeSessions.toLocaleString() || '-',
+      change: 'Currently active',
+      icon: Activity,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
     },
     {
-      title: 'Active Applications',
-      value: '3,456',
-      change: '+9.8%',
+      title: 'Users with Profiles',
+      value: stats?.overview.usersWithProfiles.toLocaleString() || '-',
+      change: `${stats?.overview.usersWithSmartProfiles || 0} with SmartProfile`,
       icon: BarChart3,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
@@ -133,6 +168,14 @@ export default function AdminDashboard() {
             <Link href="/dashboard">
               <Button variant="outline">Back to User Dashboard</Button>
             </Link>
+            <Button
+              variant="ghost"
+              onClick={fetchStats}
+              disabled={isLoadingStats}
+              className="ml-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoadingStats ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         </div>
       </div>
@@ -144,14 +187,20 @@ export default function AdminDashboard() {
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">Platform Overview</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {stats.map((stat, index) => (
+              {displayStats.map((stat, index) => (
                 <Card key={index}>
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                        <p className="text-2xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                        <p className="text-sm text-green-600 mt-1">{stat.change} from last month</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-2">
+                          {isLoadingStats ? (
+                            <span className="inline-block w-16 h-8 bg-gray-200 animate-pulse rounded"></span>
+                          ) : (
+                            stat.value
+                          )}
+                        </p>
+                        <p className="text-sm text-gray-500 mt-1">{stat.change}</p>
                       </div>
                       <div className={`p-3 rounded-lg ${stat.bgColor}`}>
                         <stat.icon className={`h-6 w-6 ${stat.color}`} />

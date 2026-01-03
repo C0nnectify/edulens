@@ -74,7 +74,8 @@ function SignUpPageInner() {
           router.push('/new-dashboard');
         }
       } else if (session?.user && !fromDream) {
-        router.push('/new-dashboard');
+        // New user without dream flow - redirect to onboarding
+        router.push('/onboarding');
       }
     }
     handleDreamMigration();
