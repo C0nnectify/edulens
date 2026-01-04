@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.env
+.env.local
+ai_service
+tests
+docs
+resume_photo

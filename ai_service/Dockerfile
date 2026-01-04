@@ -13,15 +13,18 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Copy configuration files
+COPY pyproject.toml .
+COPY README.md .
 
 # Copy application code
 COPY ./app ./app
+
+# Install Python dependencies and the app package
+RUN pip install --no-cache-dir .
+
+# Install Playwright browsers (if needed)
+RUN pip install playwright && playwright install --with-deps chromium
 
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/logs

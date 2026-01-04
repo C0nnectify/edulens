@@ -1,0 +1,38 @@
+# ===========================================
+# EduLen Environment Variables Template
+# ===========================================
+# Copy this content to .env.local in the project root
+# and fill in your actual values
+# ===========================================
+
+# ---- Database ----
+MONGODB_URI=mongodb://localhost:27017/edulens
+MONGODB_DB_NAME=edulens
+
+# ---- Authentication ----
+BETTER_AUTH_SECRET=your_super_secret_key_here_change_me
+BETTER_AUTH_URL=http://localhost:3000
+JWT_SECRET=your_jwt_secret_here_change_me
+
+# ---- AI Service ----
+# For browser/client-side API calls
+NEXT_PUBLIC_AI_SERVICE_URL=http://localhost:8000
+# For server-side API calls (inside Docker, use service name)
+AI_SERVICE_URL=http://ai-service:8000
+
+# ---- AI API Keys ----
+OPENAI_API_KEY=your_openai_api_key
+GOOGLE_API_KEY=your_google_api_key
+
+# ---- Application Settings ----
+NODE_ENV=development
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# ---- Optional: Email Service ----
+# EMAIL_PROVIDER=sendgrid
+# SENDGRID_API_KEY=your_sendgrid_api_key
+# SENDGRID_FROM_EMAIL=noreply@yourdomain.com
+
+# ---- Optional: OAuth Providers ----
+# GOOGLE_CLIENT_ID=your_google_client_id
+# GOOGLE_CLIENT_SECRET=your_google_client_secret
