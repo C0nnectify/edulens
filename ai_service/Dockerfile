@@ -15,7 +15,6 @@ RUN apt-get update && apt-get install -y \
 
 # Copy configuration files
 COPY pyproject.toml .
-COPY README.md .
 
 # Copy application code
 COPY ./app ./app
