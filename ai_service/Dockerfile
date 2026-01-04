@@ -19,6 +19,9 @@ COPY pyproject.toml .
 # Copy application code
 COPY ./app ./app
 
+# Create README.md placeholder (required by pyproject.toml)
+RUN touch README.md
+
 # Install Python dependencies and the app package
 RUN pip install --no-cache-dir .
 
