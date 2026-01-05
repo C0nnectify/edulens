@@ -18,6 +18,7 @@ COPY pyproject.toml .
 
 # Copy application code
 COPY ./app ./app
+COPY main.py .
 
 # Create README.md placeholder (required by pyproject.toml)
 RUN touch README.md
@@ -25,8 +26,8 @@ RUN touch README.md
 # Install Python dependencies and the app package
 RUN pip install --no-cache-dir .
 
-# Install Playwright browsers (if needed)
-RUN pip install playwright && playwright install --with-deps chromium
+# Install Playwright browsers (optional - may fail on some systems)
+RUN playwright install chromium || echo "Playwright browser install skipped"
 
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/logs
@@ -43,4 +44,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
