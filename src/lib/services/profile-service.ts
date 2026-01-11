@@ -237,3 +237,253 @@ export function getDreamDataSummary(): {
     sessionId: state.sessionId,
   };
 }
+
+// ============================================
+// DREAM CHAT EXTRACTION FOR PRE-FILLING
+// ============================================
+
+export interface ExtractedOnboardingField {
+  field: string;
+  value: string | string[] | number;
+  confidence: 'high' | 'medium' | 'low';
+  source: 'dream_chat';
+  sourceText?: string;
+}
+
+export interface ExtractedOnboardingData {
+  dreamCountries?: ExtractedOnboardingField;
+  preferredProgramType?: ExtractedOnboardingField;
+  budget?: ExtractedOnboardingField;
+  targetIntake?: ExtractedOnboardingField;
+  major?: ExtractedOnboardingField;
+  currentDegree?: ExtractedOnboardingField;
+}
+
+// Country patterns - mapping common mentions to standardized codes
+const COUNTRY_PATTERNS: Record<string, string[]> = {
+  'USA': ['usa', 'us', 'united states', 'america', 'american', 'states'],
+  'UK': ['uk', 'united kingdom', 'england', 'britain', 'british', 'london'],
+  'Canada': ['canada', 'canadian', 'toronto', 'vancouver'],
+  'Germany': ['germany', 'german', 'deutschland', 'munich', 'berlin'],
+  'Australia': ['australia', 'australian', 'sydney', 'melbourne'],
+  'Netherlands': ['netherlands', 'dutch', 'holland', 'amsterdam'],
+  'France': ['france', 'french', 'paris'],
+  'Singapore': ['singapore'],
+  'Japan': ['japan', 'japanese', 'tokyo'],
+  'Ireland': ['ireland', 'irish', 'dublin'],
+};
+
+// Degree patterns
+const DEGREE_PATTERNS: Record<string, string[]> = {
+  'masters': ["master's", 'masters', 'ms', 'msc', 'ma', 'mba', 'graduate degree', 'grad school'],
+  'phd': ['phd', 'ph.d', 'doctorate', 'doctoral', 'research degree'],
+  'mba': ['mba', 'business administration'],
+  'bachelors': ["bachelor's", 'bachelors', 'undergraduate', 'bs', 'ba'],
+};
+
+// Budget patterns - looking for mentions of cost/budget/funding
+const BUDGET_PATTERNS = [
+  { pattern: /(?:under|below|less than)\s*\$?\s*20[,.]?000|budget.*(?:tight|limited|low)/i, value: 'under_20k' },
+  { pattern: /\$?\s*20[,.]?000\s*(?:to|-)\s*40[,.]?000|moderate budget/i, value: '20k_40k' },
+  { pattern: /\$?\s*40[,.]?000\s*(?:to|-)\s*60[,.]?000/i, value: '40k_60k' },
+  { pattern: /\$?\s*60[,.]?000\s*(?:to|-)\s*80[,.]?000/i, value: '60k_80k' },
+  { pattern: /(?:above|over|more than)\s*\$?\s*80[,.]?000|money.*(?:not|isn't).*(?:issue|problem)|unlimited/i, value: 'above_80k' },
+  { pattern: /flexible|open budget|depends on school/i, value: 'flexible' },
+  { pattern: /scholarship|funded|assistantship|need funding|financial aid/i, value: 'under_20k' }, // Implies tight budget
+];
+
+// Semester patterns
+const SEMESTER_PATTERNS = [
+  { pattern: /fall\s*(?:20)?2[0-9]/i, semester: 'fall' },
+  { pattern: /spring\s*(?:20)?2[0-9]/i, semester: 'spring' },
+  { pattern: /summer\s*(?:20)?2[0-9]/i, semester: 'summer' },
+  { pattern: /next fall|coming fall|this fall/i, semester: 'fall' },
+  { pattern: /next spring|coming spring/i, semester: 'spring' },
+];
+
+// Year patterns
+const YEAR_PATTERN = /(?:fall|spring|summer|intake|start|begin|enroll).*?(202[4-9]|203[0-9])|(?:202[4-9]|203[0-9]).*?(?:fall|spring|summer|intake)/i;
+
+// Major/Field patterns
+const FIELD_PATTERNS = [
+  'computer science', 'cs', 'software engineering', 'data science', 'machine learning', 'ai', 'artificial intelligence',
+  'electrical engineering', 'mechanical engineering', 'civil engineering', 'chemical engineering',
+  'business', 'finance', 'marketing', 'management', 'economics',
+  'biology', 'biotechnology', 'chemistry', 'physics', 'mathematics',
+  'psychology', 'sociology', 'political science', 'international relations',
+  'law', 'medicine', 'public health', 'nursing',
+  'design', 'architecture', 'arts', 'film', 'music',
+];
+
+/**
+ * Extract onboarding data from dream chat messages
+ * Uses pattern matching with confidence scores
+ */
+export function extractOnboardingFromDreamChat(): ExtractedOnboardingData {
+  const state = loadDreamState();
+  if (!state || state.messages.length === 0) return {};
+
+  const extracted: ExtractedOnboardingData = {};
+  
+  // Combine all user messages for analysis
+  const userMessages = state.messages
+    .filter(m => m.role === 'user')
+    .map(m => m.content)
+    .join(' ');
+  
+  const allMessages = state.messages
+    .map(m => m.content)
+    .join(' ');
+  
+  const textLower = userMessages.toLowerCase();
+  const allTextLower = allMessages.toLowerCase();
+
+  // Extract countries
+  const foundCountries: string[] = [];
+  for (const [country, patterns] of Object.entries(COUNTRY_PATTERNS)) {
+    for (const pattern of patterns) {
+      if (textLower.includes(pattern)) {
+        if (!foundCountries.includes(country)) {
+          foundCountries.push(country);
+        }
+        break;
+      }
+    }
+  }
+  if (foundCountries.length > 0) {
+    extracted.dreamCountries = {
+      field: 'dreamCountries',
+      value: foundCountries.slice(0, 3), // Max 3
+      confidence: foundCountries.length === 1 ? 'high' : 'medium',
+      source: 'dream_chat',
+      sourceText: userMessages.slice(0, 100),
+    };
+  }
+
+  // Extract degree type
+  for (const [degree, patterns] of Object.entries(DEGREE_PATTERNS)) {
+    for (const pattern of patterns) {
+      if (textLower.includes(pattern)) {
+        extracted.preferredProgramType = {
+          field: 'preferredProgramType',
+          value: degree,
+          confidence: 'high',
+          source: 'dream_chat',
+        };
+        break;
+      }
+    }
+    if (extracted.preferredProgramType) break;
+  }
+
+  // Extract budget hints
+  for (const { pattern, value } of BUDGET_PATTERNS) {
+    if (pattern.test(allTextLower)) {
+      extracted.budget = {
+        field: 'budget',
+        value,
+        confidence: value === 'under_20k' && /scholarship|funded/i.test(allTextLower) ? 'medium' : 'high',
+        source: 'dream_chat',
+      };
+      break;
+    }
+  }
+
+  // Extract target intake
+  for (const { pattern, semester } of SEMESTER_PATTERNS) {
+    if (pattern.test(textLower)) {
+      const yearMatch = YEAR_PATTERN.exec(textLower);
+      const year = yearMatch ? parseInt(yearMatch[1]) : new Date().getFullYear() + 1;
+      
+      extracted.targetIntake = {
+        field: 'targetIntake',
+        value: JSON.stringify({ semester, year }),
+        confidence: yearMatch ? 'high' : 'medium',
+        source: 'dream_chat',
+      };
+      break;
+    }
+  }
+
+  // Extract field/major
+  for (const field of FIELD_PATTERNS) {
+    if (textLower.includes(field)) {
+      extracted.major = {
+        field: 'major',
+        value: field.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        confidence: 'high',
+        source: 'dream_chat',
+      };
+      break;
+    }
+  }
+
+  // Infer current degree from context
+  if (textLower.includes('currently studying') || textLower.includes('final year') || 
+      textLower.includes('graduating') || textLower.includes('undergraduate')) {
+    extracted.currentDegree = {
+      field: 'currentDegree',
+      value: 'bachelors',
+      confidence: 'medium',
+      source: 'dream_chat',
+    };
+  } else if (textLower.includes('working') || textLower.includes('job') || 
+             textLower.includes('experience') || textLower.includes('professional')) {
+    extracted.currentDegree = {
+      field: 'currentDegree',
+      value: 'bachelors', // Likely completed
+      confidence: 'low',
+      source: 'dream_chat',
+    };
+  }
+
+  return extracted;
+}
+
+/**
+ * Get prefill data for SignupStep2Form based on dream chat
+ * Filters by confidence threshold
+ */
+export function getPrefillDataFromDream(minConfidence: 'low' | 'medium' | 'high' = 'medium'): Partial<SignupStep2Data> & { 
+  _extracted: ExtractedOnboardingData;
+} {
+  const extracted = extractOnboardingFromDreamChat();
+  const prefill: Partial<SignupStep2Data> = {};
+  
+  const confidenceOrder = ['low', 'medium', 'high'];
+  const minIndex = confidenceOrder.indexOf(minConfidence);
+  
+  const shouldInclude = (conf: 'low' | 'medium' | 'high') => 
+    confidenceOrder.indexOf(conf) >= minIndex;
+
+  if (extracted.dreamCountries && shouldInclude(extracted.dreamCountries.confidence)) {
+    prefill.dreamCountries = extracted.dreamCountries.value as string[];
+  }
+
+  if (extracted.preferredProgramType && shouldInclude(extracted.preferredProgramType.confidence)) {
+    prefill.preferredProgramType = extracted.preferredProgramType.value as SignupStep2Data['preferredProgramType'];
+  }
+
+  if (extracted.budget && shouldInclude(extracted.budget.confidence)) {
+    prefill.budget = extracted.budget.value as SignupStep2Data['budget'];
+  }
+
+  if (extracted.targetIntake && shouldInclude(extracted.targetIntake.confidence)) {
+    try {
+      const intake = JSON.parse(extracted.targetIntake.value as string);
+      prefill.targetIntake = intake;
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  if (extracted.major && shouldInclude(extracted.major.confidence)) {
+    prefill.major = extracted.major.value as string;
+  }
+
+  if (extracted.currentDegree && shouldInclude(extracted.currentDegree.confidence)) {
+    prefill.currentDegree = extracted.currentDegree.value as SignupStep2Data['currentDegree'];
+  }
+
+  return { ...prefill, _extracted: extracted };
+}

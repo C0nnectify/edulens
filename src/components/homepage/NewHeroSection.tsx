@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Zap, Target, Award, Globe, FileCheck, Sparkles } from 'lucide-react';
 import { motion, useInView, useMotionValue, animate, AnimatePresence } from 'framer-motion';
+import { useSession } from '@/lib/auth-client';
+
+type DynamicHeroSectionProps = {
+  initialIsSignedIn?: boolean;
+};
 
 // --- Utility Components ---
 
@@ -679,8 +684,10 @@ const TrophyVector = ({ isActive, typingProgress }: { isActive: boolean; typingP
   </motion.svg>
 );
 
-const DynamicHeroSection = () => {
+const DynamicHeroSection = ({ initialIsSignedIn = false }: DynamicHeroSectionProps) => {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isSignedIn = Boolean(session?.user) || initialIsSignedIn;
   const slides = useMemo(() => [
     { 
       text: 'Ignite Your Potential', 
@@ -827,12 +834,12 @@ const DynamicHeroSection = () => {
 
             <div className="flex flex-col sm:flex-row gap-4 mb-12 w-full sm:w-auto">
               <a 
-                href="/signup"
+                href={isSignedIn ? '/new-dashboard' : '/signup'}
                 className="group relative px-8 py-4 bg-slate-900 rounded-xl overflow-hidden shadow-xl shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all duration-300 transform hover:-translate-y-1"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-[length:200%_auto] animate-gradient-x" />
                 <span className="relative z-10 text-white font-bold text-lg flex items-center justify-center gap-2">
-                  Get Started Now
+                  {isSignedIn ? 'Go to Dashboard' : 'Get Started Now'}
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </span>
               </a>

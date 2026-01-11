@@ -226,11 +226,15 @@ export default function OnboardingPage() {
         throw new Error('Failed to create profile');
       }
 
-      // Trigger roadmap generation
+      // Trigger dream roadmap generation from profile
+      // This creates a personalized dream roadmap for direct signup users
       await fetch('/api/smart-profile/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ direction: 'to_roadmap' }),
+        body: JSON.stringify({ 
+          direction: 'to_roadmap',
+          generateDreamRoadmap: true, // Flag to generate dream roadmap stages
+        }),
       });
 
       // Navigate to dashboard with welcome flag

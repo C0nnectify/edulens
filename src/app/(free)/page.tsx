@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import NewNavigation from '@/components/homepage/NewNavigation';
 import Footer from '@/components/Footer';
 import HomeClient from '@/components/homepage/HomeClient';
+import { auth } from '@/lib/auth-config';
 
 export const metadata: Metadata = {
   title: {
@@ -60,11 +62,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await auth.api.getSession({ headers: await headers() });
+
   return (
     <div className="min-h-screen bg-white">
       <NewNavigation />
-      <HomeClient />
+      <HomeClient initialIsSignedIn={Boolean(session?.user)} />
       <Footer />
     </div>
   );

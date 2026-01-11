@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,9 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import type { 
   SignupStep2Data, 
@@ -24,11 +26,29 @@ import type {
   TestPrepStatus 
 } from '@/types/roadmap';
 
+interface ExtractedField {
+  field: string;
+  value: string | string[] | number;
+  confidence: 'high' | 'medium' | 'low';
+  source: 'dream_chat';
+  sourceText?: string;
+}
+
+interface ExtractedOnboardingData {
+  dreamCountries?: ExtractedField;
+  preferredProgramType?: ExtractedField;
+  budget?: ExtractedField;
+  targetIntake?: ExtractedField;
+  major?: ExtractedField;
+  currentDegree?: ExtractedField;
+}
+
 interface SignupStep2FormProps {
   onSubmit: (data: SignupStep2Data) => void;
   onSkip: () => void;
   onBack: () => void;
   loading?: boolean;
+  dreamMessages?: Array<{ role: 'user' | 'ai'; content: string }>;
 }
 
 const TEST_STATUS_OPTIONS: Array<{ value: TestPrepStatus; label: string; icon: typeof Clock }> = [
@@ -76,7 +96,7 @@ function getIntakeYears(): number[] {
   return [currentYear + 1, currentYear + 2, currentYear + 3];
 }
 
-export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupStep2FormProps) {
+export function SignupStep2Form({ onSubmit, onSkip, onBack, loading, dreamMessages }: SignupStep2FormProps) {
   const [formData, setFormData] = useState<Partial<SignupStep2Data>>({
     gpa: 3.5,
     gpaScale: 4,
@@ -96,6 +116,55 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [extractedFields, setExtractedFields] = useState<ExtractedOnboardingData>({});
+  const [prefillLoading, setPrefillLoading] = useState(false);
+  const [prefillApplied, setPrefillApplied] = useState(false);
+
+  // Fetch prefill data from dream chat on mount
+  useEffect(() => {
+    async function fetchPrefill() {
+      if (!dreamMessages || dreamMessages.length === 0) return;
+      
+      setPrefillLoading(true);
+      try {
+        const response = await fetch('/api/onboarding/prefill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: dreamMessages }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.prefill) {
+            // Apply prefilled values
+            setFormData(prev => ({
+              ...prev,
+              ...data.prefill,
+              // Keep nested objects merged properly
+              targetIntake: data.prefill.targetIntake || prev.targetIntake,
+            }));
+            setExtractedFields(data.extracted || {});
+            setPrefillApplied(true);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch prefill data:', error);
+      } finally {
+        setPrefillLoading(false);
+      }
+    }
+    
+    fetchPrefill();
+  }, [dreamMessages]);
+
+  // Helper to check if a field was extracted from dream chat
+  const isFromDreamChat = (field: keyof ExtractedOnboardingData): boolean => {
+    return !!extractedFields[field];
+  };
+
+  const getFieldConfidence = (field: keyof ExtractedOnboardingData): 'high' | 'medium' | 'low' | null => {
+    return extractedFields[field]?.confidence || null;
+  };
 
   const handleGpaChange = (value: number) => {
     setFormData(prev => ({
@@ -197,6 +266,32 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
           Help us calculate a realistic timeline for your journey
         </p>
       </div>
+
+      {/* Prefill Loading State */}
+      {prefillLoading && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+          <Loader2 className="h-5 w-5 text-emerald-600 animate-spin" />
+          <span className="text-sm text-emerald-700">Extracting info from your dream chat...</span>
+        </div>
+      )}
+
+      {/* Prefill Applied Notice */}
+      {prefillApplied && Object.keys(extractedFields).length > 0 && !prefillLoading && (
+        <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <MessageSquare className="h-4 w-4 text-emerald-600" />
+            </div>
+            <div>
+              <h4 className="font-medium text-emerald-900 text-sm">Pre-filled from your dream chat</h4>
+              <p className="text-xs text-emerald-700 mt-1">
+                We extracted {Object.keys(extractedFields).length} field(s) from your conversation. 
+                Fields marked with ✓ are from your dream chat. Feel free to adjust them!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* GPA Section */}
       <div className="space-y-3">
@@ -324,10 +419,17 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
         <Label className="flex items-center gap-2 text-sm font-medium text-gray-700">
           <Globe2 className="h-4 w-4 text-emerald-600" />
           Dream Countries <span className="text-gray-400 font-normal">(Select up to 3)</span>
+          {isFromDreamChat('dreamCountries') && (
+            <span className="ml-auto flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+              <CheckCircle className="h-3 w-3" /> From dream chat
+            </span>
+          )}
         </Label>
         <div className="flex flex-wrap gap-2">
           {POPULAR_COUNTRIES.map((country) => {
             const isSelected = formData.dreamCountries?.includes(country);
+            const wasExtracted = isFromDreamChat('dreamCountries') && 
+              (extractedFields.dreamCountries?.value as string[])?.includes(country);
             return (
               <button
                 key={country}
@@ -335,7 +437,9 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
                 onClick={() => handleCountryToggle(country)}
                 className={`px-3 py-1.5 text-sm rounded-full transition-all ${
                   isSelected
-                    ? 'bg-emerald-500 text-white'
+                    ? wasExtracted 
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white ring-2 ring-emerald-300 ring-offset-1'
+                      : 'bg-emerald-500 text-white'
                     : 'bg-white border border-gray-300 text-gray-600 hover:border-emerald-300'
                 } ${
                   !isSelected && (formData.dreamCountries?.length || 0) >= 3 
@@ -344,6 +448,7 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
                 }`}
                 disabled={!isSelected && (formData.dreamCountries?.length || 0) >= 3}
               >
+                {isSelected && wasExtracted && <CheckCircle className="h-3 w-3 inline mr-1" />}
                 {country}
               </button>
             );
@@ -362,6 +467,9 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
           <Label className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <Wallet className="h-4 w-4 text-emerald-600" />
             Budget Range
+            {isFromDreamChat('budget') && (
+              <CheckCircle className="h-3 w-3 text-emerald-500 ml-auto" title="From dream chat" />
+            )}
           </Label>
           <select
             value={formData.budget || '40k_60k'}
@@ -369,7 +477,11 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
               ...prev, 
               budget: e.target.value as BudgetRange 
             }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            className={`w-full px-3 py-2 border rounded-md text-sm ${
+              isFromDreamChat('budget') 
+                ? 'border-emerald-300 bg-emerald-50/50' 
+                : 'border-gray-300'
+            }`}
           >
             {BUDGET_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -380,6 +492,9 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
           <Label className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <Calendar className="h-4 w-4 text-emerald-600" />
             Target Intake
+            {isFromDreamChat('targetIntake') && (
+              <CheckCircle className="h-3 w-3 text-emerald-500 ml-auto" title="From dream chat" />
+            )}
           </Label>
           <div className="flex gap-2">
             <select
@@ -391,7 +506,11 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
                   year: prev?.targetIntake?.year || new Date().getFullYear() + 1,
                 } 
               }))}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className={`flex-1 px-3 py-2 border rounded-md text-sm ${
+                isFromDreamChat('targetIntake') 
+                  ? 'border-emerald-300 bg-emerald-50/50' 
+                  : 'border-gray-300'
+              }`}
             >
               {INTAKE_SEMESTERS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -406,7 +525,11 @@ export function SignupStep2Form({ onSubmit, onSkip, onBack, loading }: SignupSte
                   year: parseInt(e.target.value),
                 } 
               }))}
-              className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className={`w-24 px-3 py-2 border rounded-md text-sm ${
+                isFromDreamChat('targetIntake') 
+                  ? 'border-emerald-300 bg-emerald-50/50' 
+                  : 'border-gray-300'
+              }`}
             >
               {getIntakeYears().map(year => (
                 <option key={year} value={year}>{year}</option>

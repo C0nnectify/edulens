@@ -1,9 +1,8 @@
-// Profile API - Main profile CRUD operations
-
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import clientPromise from '@/lib/mongodb';
+import { ObjectId } from 'mongodb';
 import type { UserProfile, UpdateProfileInput } from '@/types/profile';
 
 const COLLECTION_NAME = 'user_profiles';
@@ -17,21 +16,44 @@ async function getCollection() {
 // GET /api/profile - Fetch current user's profile
 export async function GET() {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    let session;
+    try {
+      session = await auth.api.getSession({
+        headers: await headers(),
+      });
+    } catch (authError) {
+      console.error('[Profile API] Auth session error:', authError);
+      return NextResponse.json({ 
+        error: 'Authentication error', 
+        details: authError instanceof Error ? authError.message : 'Unknown auth error' 
+      }, { status: 500 });
+    }
+
+    console.log('[Profile API] Session:', { userId: session?.user?.id, hasSession: !!session });
 
     if (!session?.user?.id) {
+      console.log('[Profile API] No session or user ID');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const collection = await getCollection();
-    const profile = await collection.findOne({ userId: session.user.id });
+    console.log('[Profile API] Looking for profile with userId:', session.user.id);
+    
+    // Try to find profile with either string userId or ObjectId userId
+    let profile = await collection.findOne({ userId: session.user.id });
+    
+    // If not found and the userId looks like it could be an ObjectId string, try that too
+    if (!profile && ObjectId.isValid(session.user.id)) {
+      console.log('[Profile API] Trying with ObjectId');
+      profile = await collection.findOne({ userId: new ObjectId(session.user.id) });
+    }
 
     if (!profile) {
+      console.log('[Profile API] Profile not found for userId:', session.user.id);
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
+    console.log('[Profile API] Profile found');
     // Remove MongoDB _id and return
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { _id, ...profileData } = profile;

@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: edulens-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+      MONGO_INITDB_DATABASE: edulens
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d:ro
+      - ./data/mongo:/data/db

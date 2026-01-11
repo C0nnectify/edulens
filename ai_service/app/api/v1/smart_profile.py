@@ -339,6 +339,120 @@ async def get_sync_log(
 
 
 # ============================================
+# DREAM ROADMAP GENERATION ENDPOINT
+# ============================================
+
+class GenerateDreamRoadmapRequest(BaseModel):
+    regenerate: bool = False  # If true, regenerate even if roadmap exists
+
+
+@router.post("/{user_id}/generate-dream-roadmap")
+async def generate_dream_roadmap(user_id: str, request: GenerateDreamRoadmapRequest):
+    """
+    Generate a dream roadmap from the user's SmartProfile.
+    
+    This is used for users who signed up directly (not through dream chat)
+    to create a personalized dream roadmap based on their profile data.
+    
+    The roadmap stages are generated based on:
+    - Target degree and countries
+    - Current education and test status
+    - Financial situation and scholarship needs
+    - Target intake timeline
+    """
+    from app.agents.roadmap_syncer_agent import (
+        generate_dream_stages_from_profile,
+        create_dream_roadmap_from_profile,
+    )
+    
+    collection = await get_collection()
+    profile_doc = await collection.find_one({"user_id": user_id})
+    
+    if not profile_doc:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    # Check if roadmap already exists
+    db = get_database()
+    roadmap_collection = db["roadmap_plans"]
+    existing_roadmap = await roadmap_collection.find_one({"userId": user_id})
+    
+    if existing_roadmap and not request.regenerate:
+        return {
+            "success": True,
+            "message": "Roadmap already exists",
+            "roadmap_id": str(existing_roadmap.get("_id")),
+            "stages_count": len(existing_roadmap.get("dreamStages", [])),
+            "regenerated": False,
+        }
+    
+    # Convert profile to format expected by stage generator
+    profile_data = {
+        "application_goals": {
+            "target_degree": profile_doc.get("application_goals", {}).get("target_degree"),
+            "target_countries": profile_doc.get("application_goals", {}).get("target_countries", []),
+            "target_intake": profile_doc.get("application_goals", {}).get("target_intake", {}),
+            "field_of_interest": profile_doc.get("application_goals", {}).get("field_of_interest"),
+        },
+        "education": profile_doc.get("education", {}).get("entries", [{}]),
+        "test_scores": profile_doc.get("test_scores", {}),
+        "financial_details": profile_doc.get("financial_details", {}),
+    }
+    
+    # Generate dream stages
+    dream_stages = generate_dream_stages_from_profile(profile_data)
+    
+    # Create roadmap document
+    roadmap_data = {
+        "userId": user_id,
+        "createdFromProfile": True,
+        "createdAt": datetime.utcnow(),
+        "updatedAt": datetime.utcnow(),
+        "dreamStages": [
+            {
+                "order": stage.order,
+                "title": stage.title,
+                "description": stage.description,
+                "category": stage.category,
+                "estimatedDurationWeeks": stage.estimated_duration_weeks,
+                "status": "not_started" if stage.order > 1 else "in_progress",
+            }
+            for stage in dream_stages
+        ],
+        "profileContext": {
+            "targetDegree": profile_data["application_goals"].get("target_degree"),
+            "targetCountries": profile_data["application_goals"].get("target_countries", []),
+            "targetIntake": profile_data["application_goals"].get("target_intake"),
+            "fieldOfStudy": profile_data["application_goals"].get("field_of_interest"),
+        }
+    }
+    
+    # Store/update in database
+    if existing_roadmap:
+        result = await roadmap_collection.update_one(
+            {"userId": user_id},
+            {"$set": roadmap_data}
+        )
+        roadmap_id = str(existing_roadmap.get("_id"))
+    else:
+        result = await roadmap_collection.insert_one(roadmap_data)
+        roadmap_id = str(result.inserted_id)
+    
+    logger.info(f"Generated dream roadmap for user {user_id} with {len(dream_stages)} stages")
+    
+    return {
+        "success": True,
+        "message": "Dream roadmap generated successfully",
+        "roadmap_id": roadmap_id,
+        "stages_count": len(dream_stages),
+        "stages": [
+            {"order": s.order, "title": s.title, "category": s.category}
+            for s in dream_stages
+        ],
+        "regenerated": existing_roadmap is not None,
+    }
+
+
+# ============================================
 # CHAT EXTRACTION ENDPOINT
 # ============================================
 

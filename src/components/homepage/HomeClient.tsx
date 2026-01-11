@@ -7,10 +7,14 @@ import PricingAndFAQ from "@/components/homepage/PricingAndFAQ";
 import WaitlistSection from "@/components/WaitlistSection";
 import FloatingCTA from "@/components/homepage/FloatingCTA";
 
-const HomeClient: React.FC = () => {
+type HomeClientProps = {
+  initialIsSignedIn?: boolean;
+};
+
+const HomeClient: React.FC<HomeClientProps> = ({ initialIsSignedIn = false }) => {
   return (
     <>
-      <NewHeroSection />
+      <NewHeroSection initialIsSignedIn={initialIsSignedIn} />
       <KeyBenefits />
       <HowItWorks />
       <FeaturesGrid />

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Bot, AlertCircle, CheckCircle, Clock, FileText, Target, Rocket, Sparkles, Loader2 } from 'lucide-react';
 import { signUp, useSession } from '@/lib/auth-client';
-import { hasPendingDreamData, getDreamDataSummary, migrateDreamToProfile } from '@/lib/services/profile-service';
+import { hasPendingDreamData, getDreamDataSummary, migrateDreamToProfile, loadDreamState } from '@/lib/services/profile-service';
 import { SignupStep2Form } from '@/components/signup/SignupStep2Form';
 import type { SignupStep2Data } from '@/types/roadmap';
 
@@ -20,12 +20,13 @@ function SignUpPageInner() {
   const fromDream = searchParams.get('from') === 'dream';
   const sessionId = searchParams.get('sessionId');
   
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const [currentStep, setCurrentStep] = useState<SignupStep>('account');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [migratingDream, setMigratingDream] = useState(false);
+  const [didSubmitSignup, setDidSubmitSignup] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
@@ -40,14 +41,31 @@ function SignUpPageInner() {
     stageCount: number;
     sessionId: string;
   } | null>(null);
+  const [dreamMessages, setDreamMessages] = useState<Array<{ role: 'user' | 'ai'; content: string }>>([]);
 
   // Check for pending dream data on mount
   useEffect(() => {
     if (fromDream && hasPendingDreamData()) {
       const summary = getDreamDataSummary();
       setDreamSummary(summary);
+      
+      // Load dream messages for prefill extraction
+      const dreamState = loadDreamState();
+      if (dreamState?.messages) {
+        setDreamMessages(dreamState.messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })));
+      }
     }
   }, [fromDream]);
+
+  // If user is already signed in, /signup should not route them into onboarding
+  useEffect(() => {
+    if (!isPending && session?.user && !fromDream && !didSubmitSignup) {
+      router.replace('/dashboard');
+    }
+  }, [session, isPending, fromDream, didSubmitSignup, router]);
 
   // Handle dream migration after successful signup - wait for Step 2 if from dream
   useEffect(() => {
@@ -74,12 +92,14 @@ function SignUpPageInner() {
           router.push('/new-dashboard');
         }
       } else if (session?.user && !fromDream) {
-        // New user without dream flow - redirect to onboarding
-        router.push('/onboarding');
+        // New user without dream flow - redirect to onboarding (only after signup on this page)
+        if (didSubmitSignup) {
+          router.push('/onboarding');
+        }
       }
     }
     handleDreamMigration();
-  }, [session, fromDream, migratingDream, router, currentStep, step2Data, loading]);
+  }, [session, fromDream, migratingDream, router, currentStep, step2Data, loading, didSubmitSignup]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -167,6 +187,9 @@ function SignUpPageInner() {
       if (result.error) {
         setError(result.error.message || 'Failed to create account. Email may already be in use.');
         setLoading(false);
+        setDidSubmitSignup(false);
+      } else if (result.data) {
+        setDidSubmitSignup(true);
       }
       // If success, the useEffect will handle redirect/migration
     } catch (err) {
@@ -664,6 +687,7 @@ function SignUpPageInner() {
                 onSkip={handleStep2Skip}
                 onBack={handleStep2Back}
                 loading={loading}
+                dreamMessages={dreamMessages}
               />
             </div>
           )}

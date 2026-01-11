@@ -659,6 +659,204 @@ def create_roadmap_syncer_agent(db=None, rules: List[SyncRule] = None) -> Roadma
 
 
 # ============================================
+# DREAM ROADMAP GENERATION FROM PROFILE
+# ============================================
+
+class DreamRoadmapStage(BaseModel):
+    """Stage for dream roadmap"""
+    order: int
+    title: str
+    description: str
+    category: str = "general"
+    estimated_duration_weeks: int = 4
+
+
+def generate_dream_stages_from_profile(profile_data: Dict[str, Any]) -> List[DreamRoadmapStage]:
+    """
+    Generate dream roadmap stages from SmartProfile data.
+    This creates a personalized dream roadmap for users who signed up directly
+    without using the dream chat flow.
+    
+    Args:
+        profile_data: SmartProfile data from onboarding
+        
+    Returns:
+        List of DreamRoadmapStage objects
+    """
+    stages = []
+    
+    # Extract key info from profile
+    target_degree = profile_data.get("application_goals", {}).get("target_degree", "masters")
+    target_countries = profile_data.get("application_goals", {}).get("target_countries", [])
+    target_intake = profile_data.get("application_goals", {}).get("target_intake", {})
+    education = profile_data.get("education", [{}])[0] if profile_data.get("education") else {}
+    test_scores = profile_data.get("test_scores", {})
+    financial = profile_data.get("financial_details", {})
+    
+    field_of_study = education.get("field_of_study") or profile_data.get("application_goals", {}).get("field_of_interest", "your field")
+    target_semester = target_intake.get("semester", "fall")
+    target_year = target_intake.get("year", datetime.utcnow().year + 1)
+    
+    # Determine country string
+    if target_countries:
+        if len(target_countries) == 1:
+            country_str = target_countries[0]
+        else:
+            country_str = f"{', '.join(target_countries[:-1])} or {target_countries[-1]}"
+    else:
+        country_str = "abroad"
+    
+    # Stage 1: Foundation - Self Assessment
+    stages.append(DreamRoadmapStage(
+        order=1,
+        title="Solidify Your Foundation",
+        description=f"Reflect on your passion for {field_of_study} and clarify why pursuing a {target_degree} in {country_str} aligns with your career goals.",
+        category="foundation",
+        estimated_duration_weeks=2
+    ))
+    
+    # Stage 2: Test Preparation (conditional)
+    english_test = test_scores.get("english", {})
+    gre_data = test_scores.get("gre", {})
+    
+    needs_english = not english_test.get("overall_score")
+    needs_gre = target_degree in ["masters", "phd"] and not gre_data.get("total_score")
+    
+    if needs_english or needs_gre:
+        test_list = []
+        if needs_english:
+            test_list.append("TOEFL/IELTS")
+        if needs_gre:
+            test_list.append("GRE")
+        
+        stages.append(DreamRoadmapStage(
+            order=2,
+            title="Conquer Your Tests",
+            description=f"Prepare and excel in {' and '.join(test_list)} to strengthen your application profile.",
+            category="test_prep",
+            estimated_duration_weeks=12 if needs_gre else 8
+        ))
+    
+    # Stage 3: Research Programs
+    stages.append(DreamRoadmapStage(
+        order=3,
+        title="Discover Your Perfect Programs",
+        description=f"Research {target_degree} programs in {field_of_study} across {country_str}, identifying universities that match your profile and aspirations.",
+        category="research",
+        estimated_duration_weeks=4
+    ))
+    
+    # Stage 4: Build Your Profile
+    if target_degree == "phd":
+        profile_desc = "Strengthen your research profile through publications, connect with potential advisors, and identify research opportunities."
+    elif target_degree == "mba":
+        profile_desc = "Highlight your leadership experiences, professional achievements, and clearly articulate your post-MBA goals."
+    else:
+        profile_desc = f"Build a compelling profile through relevant projects, internships, or research in {field_of_study}."
+    
+    stages.append(DreamRoadmapStage(
+        order=4,
+        title="Build Your Unique Story",
+        description=profile_desc,
+        category="profile_building",
+        estimated_duration_weeks=8
+    ))
+    
+    # Stage 5: Application Materials
+    stages.append(DreamRoadmapStage(
+        order=5,
+        title="Craft Your Applications",
+        description="Create compelling SOPs, secure strong recommendation letters, and polish your resume to tell your unique story.",
+        category="materials",
+        estimated_duration_weeks=6
+    ))
+    
+    # Stage 6: Financial Planning
+    budget = financial.get("budget_range", {})
+    needs_funding = financial.get("need_scholarship", False)
+    
+    if needs_funding:
+        funding_desc = "Research and apply for scholarships, assistantships, and financial aid to fund your education."
+    else:
+        funding_desc = "Plan your finances, explore funding options, and ensure you're prepared for the investment in your future."
+    
+    stages.append(DreamRoadmapStage(
+        order=6,
+        title="Secure Your Funding",
+        description=funding_desc,
+        category="financial",
+        estimated_duration_weeks=4
+    ))
+    
+    # Stage 7: Submit & Track
+    stages.append(DreamRoadmapStage(
+        order=7,
+        title="Submit & Succeed",
+        description=f"Submit your applications before deadlines for {target_semester.capitalize()} {target_year}, track your status, and prepare for interviews.",
+        category="submission",
+        estimated_duration_weeks=4
+    ))
+    
+    return stages
+
+
+async def create_dream_roadmap_from_profile(
+    user_id: str,
+    profile_data: Dict[str, Any],
+    db=None
+) -> Dict[str, Any]:
+    """
+    Create a dream roadmap for users who signed up directly (not through dream chat).
+    Regenerates the roadmap from combined profile context.
+    
+    Args:
+        user_id: The user's ID
+        profile_data: SmartProfile data
+        db: Database connection (optional)
+        
+    Returns:
+        Created roadmap data
+    """
+    # Generate dream stages from profile
+    dream_stages = generate_dream_stages_from_profile(profile_data)
+    
+    # Convert to serializable format
+    roadmap_data = {
+        "userId": user_id,
+        "createdFromProfile": True,
+        "createdAt": datetime.utcnow(),
+        "dreamStages": [
+            {
+                "order": stage.order,
+                "title": stage.title,
+                "description": stage.description,
+                "category": stage.category,
+                "estimatedDurationWeeks": stage.estimated_duration_weeks,
+                "status": "not_started" if stage.order > 1 else "in_progress",
+            }
+            for stage in dream_stages
+        ],
+        "profileContext": {
+            "targetDegree": profile_data.get("application_goals", {}).get("target_degree"),
+            "targetCountries": profile_data.get("application_goals", {}).get("target_countries", []),
+            "targetIntake": profile_data.get("application_goals", {}).get("target_intake"),
+            "fieldOfStudy": profile_data.get("application_goals", {}).get("field_of_interest"),
+        }
+    }
+    
+    # Store in database if available
+    if db:
+        result = await db["roadmap_plans"].update_one(
+            {"userId": user_id},
+            {"$set": roadmap_data},
+            upsert=True
+        )
+        roadmap_data["_id"] = str(result.upserted_id) if result.upserted_id else None
+    
+    return roadmap_data
+
+
+# ============================================
 # CONVENIENCE FUNCTIONS
 # ============================================
 

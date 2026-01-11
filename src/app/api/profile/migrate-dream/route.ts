@@ -181,6 +181,64 @@ export async function POST(request: NextRequest) {
 
     await collection.insertOne(newProfile);
 
+    // If step2Data is provided, regenerate the roadmap with combined context
+    // This ensures the roadmap reflects both dream aspirations and reality constraints
+    if (step2Data) {
+      try {
+        const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+        
+        // Create SmartProfile from step2 data for roadmap generation
+        const smartProfileData = {
+          user_id: session.user.id,
+          initial_data: {
+            application_goals: {
+              target_degree: step2Data.preferredProgramType,
+              target_countries: step2Data.dreamCountries,
+              target_intake: step2Data.targetIntake,
+              field_of_interest: step2Data.major,
+            },
+            education: {
+              entries: [{
+                degree_type: step2Data.currentDegree,
+                gpa: step2Data.gpa,
+                gpa_scale: step2Data.gpaScale,
+                field_of_study: step2Data.major,
+              }],
+            },
+            test_scores: {
+              gre: step2Data.tests.gre,
+              toefl: step2Data.tests.toefl,
+              ielts: step2Data.tests.ielts,
+            },
+            financial_details: {
+              budget_range: { 
+                range: step2Data.budget,
+              },
+              need_scholarship: step2Data.budget === 'under_20k',
+            },
+          },
+        };
+
+        // Create/update SmartProfile
+        await fetch(`${AI_SERVICE_URL}/api/v1/smart-profile/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(smartProfileData),
+        }).catch(() => {});
+
+        // Trigger roadmap regeneration from combined profile context
+        await fetch(`${AI_SERVICE_URL}/api/v1/smart-profile/${session.user.id}/generate-dream-roadmap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ regenerate: true }),
+        }).catch(() => {});
+        
+      } catch (syncError) {
+        console.warn('Roadmap regeneration failed (non-blocking):', syncError);
+        // Don't fail the migration if sync fails
+      }
+    }
+
     return NextResponse.json(newProfile, { status: 201 });
   } catch (error) {
     console.error('POST /api/profile/migrate-dream error:', error);
