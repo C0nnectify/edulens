@@ -11,13 +11,21 @@ import type {
 } from '@/types/roadmap';
 
 class RoadmapClient {
-  private readonly baseUrl = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+  private readonly baseUrl =
+    // In the browser, prefer same-origin proxy routes to avoid hard-coding
+    // backend URLs (and to prevent localhost from being baked at build time).
+    typeof window !== 'undefined'
+      ? ''
+      : process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
 
   /**
    * Make a request to the roadmap API (directly to backend, no auth required for roadmap)
    */
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseUrl}/api/v1/roadmap${endpoint}`;
+    const url =
+      typeof window !== 'undefined'
+        ? `/api/ai/roadmap${endpoint}`
+        : `${this.baseUrl}/api/v1/roadmap${endpoint}`;
 
     try {
       const response = await fetch(url, {

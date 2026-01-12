@@ -244,14 +244,22 @@ export class FileProcessingService {
     // Use pdf-parse or similar library
     // For now, call AI service endpoint
     try {
-      const aiBase = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+      const aiBase =
+        typeof window !== 'undefined'
+          ? ''
+          : process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
       const formData = new FormData();
       formData.append('file', new Blob([buffer]), 'document.pdf');
       
-      const response = await fetch(`${aiBase}/api/documents/extract-text`, {
+      const response = await fetch(
+        typeof window !== 'undefined'
+          ? `/api/ai/documents/extract-text`
+          : `${aiBase}/api/documents/extract-text`,
+        {
         method: 'POST',
         body: formData,
-      });
+        }
+      );
       
       if (response.ok) {
         const data = await response.json();
@@ -273,14 +281,20 @@ export class FileProcessingService {
   private static async performOCR(buffer: Buffer, fileType: 'pdf' | 'image'): Promise<string> {
     // Use Tesseract.js or call AI service OCR endpoint
     try {
-      const aiBase = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+      const aiBase =
+        typeof window !== 'undefined'
+          ? ''
+          : process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
       const formData = new FormData();
       formData.append('file', new Blob([buffer]), `document.${fileType === 'pdf' ? 'pdf' : 'png'}`);
       
-      const response = await fetch(`${aiBase}/api/documents/ocr`, {
+      const response = await fetch(
+        typeof window !== 'undefined' ? `/api/ai/documents/ocr` : `${aiBase}/api/documents/ocr`,
+        {
         method: 'POST',
         body: formData,
-      });
+        }
+      );
       
       if (response.ok) {
         const data = await response.json();
@@ -299,14 +313,22 @@ export class FileProcessingService {
   private static async extractTextFromWord(buffer: Buffer): Promise<string> {
     // Use mammoth or similar library
     try {
-      const aiBase = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+      const aiBase =
+        typeof window !== 'undefined'
+          ? ''
+          : process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
       const formData = new FormData();
       formData.append('file', new Blob([buffer]), 'document.docx');
       
-      const response = await fetch(`${aiBase}/api/documents/extract-text`, {
+      const response = await fetch(
+        typeof window !== 'undefined'
+          ? `/api/ai/documents/extract-text`
+          : `${aiBase}/api/documents/extract-text`,
+        {
         method: 'POST',
         body: formData,
-      });
+        }
+      );
       
       if (response.ok) {
         const data = await response.json();
@@ -327,9 +349,16 @@ export class FileProcessingService {
     text: string
   ): Promise<{ collectionName: string; chunkIds: string[]; chunkCount: number }> {
     try {
-      const aiBase = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+      const aiBase =
+        typeof window !== 'undefined'
+          ? ''
+          : process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
       
-      const response = await fetch(`${aiBase}/api/embeddings/generate`, {
+      const response = await fetch(
+        typeof window !== 'undefined'
+          ? `/api/ai/embeddings/generate`
+          : `${aiBase}/api/embeddings/generate`,
+        {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -340,7 +369,8 @@ export class FileProcessingService {
           chunk_size: 500,
           chunk_overlap: 50,
         }),
-      });
+        }
+      );
       
       if (response.ok) {
         const data = await response.json();

@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Proxy to Python backend
-  const base = process.env.NEXT_PUBLIC_AI_SERVICE_URL || "http://localhost:8000";
+  const base = process.env.AI_SERVICE_URL || "http://localhost:8000";
   try {
     const resp = await fetch(`${base}/chat-agent/message`, {
       method: "POST",

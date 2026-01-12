@@ -1,6 +1,9 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
 WORKDIR /app
+
+# Install system deps for TLS
+RUN apt-get update && apt-get install -y ca-certificates openssl && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY package.json package-lock.json ./
@@ -9,14 +12,9 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build-time environment variables (placeholders for Next.js build)
-# These are overridden at runtime by docker-compose environment
-ENV MONGODB_URI=mongodb://mongodb:27017/edulens
-ENV MONGODB_DB_NAME=edulens
-ENV BETTER_AUTH_SECRET=build_placeholder
-ENV BETTER_AUTH_URL=http://localhost:3000
-ENV JWT_SECRET=build_placeholder
-ENV NEXT_PUBLIC_AI_SERVICE_URL=http://localhost:8000
+# NOTE: Avoid setting build-time placeholder env vars here.
+# Next.js may bake NEXT_PUBLIC_* values into the client bundle during build.
+# Configure runtime env vars in Render/Vercel instead.
 
 # Build the Next.js application
 RUN npm run build

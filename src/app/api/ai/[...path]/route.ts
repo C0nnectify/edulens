@@ -65,27 +65,29 @@ async function handleRequest(
   method: string
 ) {
   try {
-    // 1. Authenticate user using better-auth
-    const session = await auth.api.getSession({
-      headers: req.headers
-    });
+    const path = params.path.join('/');
+    const isPublicRoute = path === 'health' || path.startsWith('roadmap');
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    // 1. Authenticate user using better-auth (skip for explicitly public routes)
+    const session = isPublicRoute
+      ? null
+      : await auth.api.getSession({
+          headers: req.headers,
+        });
+
+    if (!isPublicRoute && !session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // 2. Construct the FastAPI URL
-    const path = params.path.join('/');
     const searchParams = req.nextUrl.searchParams.toString();
     const fastApiUrl = `${AI_SERVICE_URL}/api/v1/${path}${searchParams ? `?${searchParams}` : ''}`;
 
-    // 3. Prepare headers with user ID
-    const headers: HeadersInit = {
-      'x-user-id': session.user.id,
-    };
+    // 3. Prepare headers with optional user ID
+    const headers: HeadersInit = {};
+    if (session?.user?.id) {
+      headers['x-user-id'] = session.user.id;
+    }
 
     // 5. Prepare request body based on content type
     let body: any = undefined;
