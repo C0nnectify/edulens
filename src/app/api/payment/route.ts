@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
+import { getMongoClientPromise } from '@/lib/mongodb';
 import { randomUUID } from 'crypto';
 import { ObjectId } from 'mongodb';
 
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Connect to MongoDB
-    const client = await clientPromise;
+    const client = await getMongoClientPromise();
     const db = client.db();
     const mentorshipCollection = db.collection('root_edulen');
     const paymentCollection = db.collection('payments');
@@ -93,7 +93,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Connect to MongoDB
-    const client = await clientPromise;
+    const client = await getMongoClientPromise();
     const db = client.db();
     const paymentCollection = db.collection('payments');
     const mentorshipCollection = db.collection('root_edulen');

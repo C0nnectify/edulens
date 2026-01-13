@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
-import clientPromise from '@/lib/mongodb';
+import { getMongoClientPromise } from '@/lib/mongodb';
 import type { 
   RoadmapPlan, 
   RoadmapScenario, 
@@ -16,7 +16,7 @@ import type {
 const COLLECTION_NAME = 'roadmap_plans';
 
 async function getCollection() {
-  const client = await clientPromise;
+  const client = await getMongoClientPromise();
   const db = client.db();
   return db.collection(COLLECTION_NAME);
 }
@@ -284,7 +284,7 @@ export async function POST(request: NextRequest) {
     await collection.insertOne(newPlan);
 
     // Update user profile with roadmapPlanId
-    const profileCollection = (await clientPromise).db().collection('user_profiles');
+    const profileCollection = (await getMongoClientPromise()).db().collection('user_profiles');
     await profileCollection.updateOne(
       { userId: session.user.id },
       { $set: { roadmapPlanId: planId, updatedAt: new Date() } }

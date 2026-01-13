@@ -5,7 +5,7 @@
  */
 
 import { ObjectId } from 'mongodb';
-import clientPromise from '@/lib/mongodb';
+import { getMongoClientPromise } from '@/lib/mongodb';
 import { UserFile, USER_FILES_COLLECTION, TextChunk } from '@/lib/db/models/UserFile';
 import * as crypto from 'crypto';
 
@@ -60,7 +60,7 @@ export class FileProcessingService {
     };
     
     // Save to MongoDB
-    const client = await clientPromise;
+    const client = await getMongoClientPromise();
     const db = client.db();
     const collection = db.collection<UserFile>(USER_FILES_COLLECTION);
     await collection.insertOne(userFile);
@@ -81,7 +81,7 @@ export class FileProcessingService {
     generateEmbeddings: boolean
   ): Promise<void> {
     try {
-      const client = await clientPromise;
+      const client = await getMongoClientPromise();
       const db = client.db();
       const collection = db.collection<UserFile>(USER_FILES_COLLECTION);
       
@@ -214,7 +214,7 @@ export class FileProcessingService {
     } catch (error) {
       console.error('File processing error:', error);
       
-      const client = await clientPromise;
+      const client = await getMongoClientPromise();
       const db = client.db();
       const collection = db.collection<UserFile>(USER_FILES_COLLECTION);
       
@@ -391,7 +391,7 @@ export class FileProcessingService {
    * Get file by ID
    */
   static async getFile(fileId: string, userId: string): Promise<UserFile | null> {
-    const client = await clientPromise;
+    const client = await getMongoClientPromise();
     const db = client.db();
     const collection = db.collection<UserFile>(USER_FILES_COLLECTION);
     
@@ -425,7 +425,7 @@ export class FileProcessingService {
       sortOrder?: 'asc' | 'desc';
     } = {}
   ): Promise<{ files: UserFile[]; total: number }> {
-    const client = await clientPromise;
+    const client = await getMongoClientPromise();
     const db = client.db();
     const collection = db.collection<UserFile>(USER_FILES_COLLECTION);
     
@@ -459,7 +459,7 @@ export class FileProcessingService {
    * Delete file
    */
   static async deleteFile(fileId: string, userId: string): Promise<boolean> {
-    const client = await clientPromise;
+    const client = await getMongoClientPromise();
     const db = client.db();
     const collection = db.collection<UserFile>(USER_FILES_COLLECTION);
     
@@ -484,9 +484,16 @@ export class FileProcessingService {
    */
   private static async deleteEmbeddings(embeddingIds: string[]): Promise<void> {
     try {
-      const aiBase = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+      const aiBase =
+        typeof window !== 'undefined'
+          ? ''
+          : process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
       
-      await fetch(`${aiBase}/api/embeddings/delete`, {
+      await fetch(
+        typeof window !== 'undefined'
+          ? `/api/ai/embeddings/delete`
+          : `${aiBase}/api/embeddings/delete`,
+        {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -494,7 +501,8 @@ export class FileProcessingService {
         body: JSON.stringify({
           ids: embeddingIds,
         }),
-      });
+        }
+      );
     } catch (error) {
       console.error('Embedding deletion error:', error);
     }
@@ -513,9 +521,16 @@ export class FileProcessingService {
     } = {}
   ): Promise<UserFile[]> {
     try {
-      const aiBase = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+      const aiBase =
+        typeof window !== 'undefined'
+          ? ''
+          : process.env.AI_SERVICE_URL || process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
       
-      const response = await fetch(`${aiBase}/api/embeddings/search`, {
+      const response = await fetch(
+        typeof window !== 'undefined'
+          ? `/api/ai/embeddings/search`
+          : `${aiBase}/api/embeddings/search`,
+        {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -529,14 +544,15 @@ export class FileProcessingService {
             tags: options.tags,
           },
         }),
-      });
+        }
+      );
       
       if (response.ok) {
         const data = await response.json();
         const fileIds = data.results?.map((r: any) => r.file_id) || [];
         
         // Get full file records from MongoDB
-        const client = await clientPromise;
+        const client = await getMongoClientPromise();
         const db = client.db();
         const collection = db.collection<UserFile>(USER_FILES_COLLECTION);
         
@@ -567,7 +583,7 @@ export class FileProcessingService {
   }
   
   private static async findDuplicateFile(userId: string, fileHash: string): Promise<UserFile | null> {
-    const client = await clientPromise;
+    const client = await getMongoClientPromise();
     const db = client.db();
     const collection = db.collection<UserFile>(USER_FILES_COLLECTION);
     

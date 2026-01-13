@@ -6,7 +6,7 @@
  */
 
 import { Collection, Db, Document, CreateIndexesOptions, IndexDescription } from 'mongodb';
-import clientPromise from '@/lib/mongodb';
+import { getMongoClientPromise } from '@/lib/mongodb';
 import type {
   DocumentMetadata,
   DocumentChunk,
@@ -28,7 +28,7 @@ export async function getDatabase(): Promise<Db> {
     return cachedDb;
   }
 
-  const client = await clientPromise;
+  const client = await getMongoClientPromise();
   const db = client.db(process.env.MONGODB_DB_NAME || 'edulens');
   cachedDb = db;
 

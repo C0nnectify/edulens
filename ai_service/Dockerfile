@@ -6,6 +6,8 @@ WORKDIR /app
 
 # Install system dependencies including Tesseract OCR
 RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    openssl \
     tesseract-ocr \
     tesseract-ocr-eng \
     libtesseract-dev \

@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
-import clientPromise from '@/lib/mongodb';
+import { getMongoClientPromise } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 
 const USERS_COLLECTION = 'user';
@@ -17,7 +17,7 @@ const SMART_PROFILES_COLLECTION = 'smart_profiles';
 const SESSIONS_COLLECTION = 'session';
 
 async function getDb() {
-  const client = await clientPromise;
+  const client = await getMongoClientPromise();
   return client.db();
 }
 

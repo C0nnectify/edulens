@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
-import clientPromise from '@/lib/mongodb';
+import { getMongoClientPromise } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 
 const USERS_COLLECTION = 'user';
@@ -23,7 +23,7 @@ const ACCOUNTS_COLLECTION = 'account';
 const VERIFICATIONS_COLLECTION = 'verification';
 
 async function getDb() {
-  const client = await clientPromise;
+  const client = await getMongoClientPromise();
   return client.db();
 }
 

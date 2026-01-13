@@ -2,12 +2,6 @@
 
 import mongoose from 'mongoose';
 
-if (!process.env.MONGODB_URI) {
-  throw new Error('Invalid/Missing environment variable: "MONGODB_URI"');
-}
-
-const MONGODB_URI = process.env.MONGODB_URI;
-
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -30,6 +24,11 @@ if (!global.mongoose) {
  * Reuses existing connection in development to prevent connection exhaustion
  */
 export async function connectDB(): Promise<typeof mongoose> {
+  const mongoUri = process.env.MONGODB_URI;
+  if (!mongoUri) {
+    throw new Error('Invalid/Missing environment variable: "MONGODB_URI"');
+  }
+
   // If we already have a connection, return it
   if (cached.conn) {
     return cached.conn;
@@ -41,7 +40,7 @@ export async function connectDB(): Promise<typeof mongoose> {
       bufferCommands: false,
     };
 
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+    cached.promise = mongoose.connect(mongoUri, opts).then((mongoose) => {
       console.log('✅ MongoDB connected successfully');
       return mongoose;
     }).catch((error) => {

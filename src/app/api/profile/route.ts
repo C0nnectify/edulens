@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
-import clientPromise from '@/lib/mongodb';
+import { getMongoClientPromise } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import type { UserProfile, UpdateProfileInput } from '@/types/profile';
 
 const COLLECTION_NAME = 'user_profiles';
 
 async function getCollection() {
-  const client = await clientPromise;
+  const client = await getMongoClientPromise();
   const db = client.db();
   return db.collection(COLLECTION_NAME);
 }
