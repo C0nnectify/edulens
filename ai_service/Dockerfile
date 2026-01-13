@@ -28,8 +28,10 @@ RUN touch README.md
 # Install Python dependencies and the app package
 RUN pip install --no-cache-dir .
 
-# Install Playwright browsers (optional - may fail on some systems)
-RUN playwright install chromium || echo "Playwright browser install skipped"
+# Playwright browsers are intentionally NOT installed in this container.
+# They add a lot of weight and require extra OS libraries. If/when you need
+# browser automation on Render, use a larger plan and install with deps.
+RUN echo "Skipping Playwright browser install"
 
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/logs

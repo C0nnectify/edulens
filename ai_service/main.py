@@ -35,87 +35,104 @@ async def lifespan(app: FastAPI):
     logger.info("Starting EduLen AI Service...")
 
     # Initialize ChromaDB on startup
-    try:
-        chroma_manager.initialize()
-        logger.info("ChromaDB initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize ChromaDB: {e}")
-        raise
+    if settings.ENABLE_CHROMA:
+        try:
+            chroma_manager.initialize()
+            logger.info("ChromaDB initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize ChromaDB: {e}")
+            raise
+    else:
+        logger.warning("ChromaDB initialization disabled (ENABLE_CHROMA=false)")
 
     # Initialize MongoDB for document operations
-    try:
-        await connect_to_mongodb()
-        await create_indexes()
-        logger.info("MongoDB initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize MongoDB: {e}")
-        raise
+    if settings.ENABLE_MONGODB:
+        try:
+            await connect_to_mongodb()
+            await create_indexes()
+            logger.info("MongoDB initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize MongoDB: {e}")
+            raise
+    else:
+        logger.warning("MongoDB initialization disabled (ENABLE_MONGODB=false)")
 
     # Load admission prediction model
-    try:
-        from app.services.admission_prediction_service import admission_service
-        logger.info("Loading admission prediction model...")
-        await admission_service.load_latest_model()
-        if admission_service.model_metadata:
-            logger.info(
-                f"Admission model loaded: {admission_service.model_metadata.version} "
-                f"(accuracy: {admission_service.model_metadata.accuracy:.3f})"
-            )
-        else:
-            logger.info("No trained admission model found, using heuristic predictions")
-    except Exception as e:
-        logger.error(f"Failed to initialize admission service: {e}")
-        logger.warning("Admission prediction endpoints may have limited functionality")
+    if settings.ENABLE_ADMISSION_MODEL_LOAD:
+        try:
+            from app.services.admission_prediction_service import admission_service
+            logger.info("Loading admission prediction model...")
+            await admission_service.load_latest_model()
+            if admission_service.model_metadata:
+                logger.info(
+                    f"Admission model loaded: {admission_service.model_metadata.version} "
+                    f"(accuracy: {admission_service.model_metadata.accuracy:.3f})"
+                )
+            else:
+                logger.info("No trained admission model found, using heuristic predictions")
+        except Exception as e:
+            logger.error(f"Failed to initialize admission service: {e}")
+            logger.warning("Admission prediction endpoints may have limited functionality")
+    else:
+        logger.warning("Admission model loading disabled (ENABLE_ADMISSION_MODEL_LOAD=false)")
 
     # Initialize Roadmap Service
-    try:
-        from app.services.roadmap_service import roadmap_service
-        logger.info("Loading roadmap stages...")
-        roadmap_service.load_stages()
-        logger.info(f"Roadmap service initialized with {roadmap_service.get_total_stages()} stages")
-    except Exception as e:
-        logger.error(f"Failed to initialize roadmap service: {e}")
-        logger.warning("Roadmap endpoints may not work properly")
+    if settings.ENABLE_ROADMAP:
+        try:
+            from app.services.roadmap_service import roadmap_service
+            logger.info("Loading roadmap stages...")
+            roadmap_service.load_stages()
+            logger.info(f"Roadmap service initialized with {roadmap_service.get_total_stages()} stages")
+        except Exception as e:
+            logger.error(f"Failed to initialize roadmap service: {e}")
+            logger.warning("Roadmap endpoints may not work properly")
+    else:
+        logger.warning("Roadmap initialization disabled (ENABLE_ROADMAP=false)")
 
     # Initialize Multi-Agent System
-    try:
-        logger.info("Initializing Multi-Agent System...")
+    if settings.ENABLE_MULTI_AGENT:
+        try:
+            logger.info("Initializing Multi-Agent System...")
 
-        # Initialize MongoDB memory manager
-        memory_manager = MongoDBMemoryManager(
-            connection_string=settings.MONGODB_URI,
-            database_name=settings.MONGODB_DATABASE
-        )
-        await memory_manager.initialize_indexes()
-        logger.info("MongoDB memory manager initialized")
+            # Initialize MongoDB memory manager
+            memory_manager = MongoDBMemoryManager(
+                connection_string=settings.MONGODB_URI,
+                database_name=settings.MONGODB_DATABASE
+            )
+            await memory_manager.initialize_indexes()
+            logger.info("MongoDB memory manager initialized")
 
-        # Initialize orchestrator
-        multi_agent.init_orchestrator(
-            mongo_uri=settings.MONGODB_URI,
-            google_api_key=settings.GOOGLE_API_KEY,
-            firecrawl_api_key=settings.FIRECRAWL_API_KEY
-        )
+            # Initialize orchestrator
+            multi_agent.init_orchestrator(
+                mongo_uri=settings.MONGODB_URI,
+                google_api_key=settings.GOOGLE_API_KEY,
+                firecrawl_api_key=settings.FIRECRAWL_API_KEY
+            )
 
-        # Compile the LangGraph
-        multi_agent.orchestrator.compile_graph()
+            # Compile the LangGraph
+            multi_agent.orchestrator.compile_graph()
 
-        # Start session cleanup task
-        await multi_agent.session_manager.start_cleanup_task()
+            # Start session cleanup task
+            await multi_agent.session_manager.start_cleanup_task()
 
-        logger.info("Multi-Agent System initialized successfully")
+            logger.info("Multi-Agent System initialized successfully")
 
-    except Exception as e:
-        logger.error(f"Failed to initialize Multi-Agent System: {e}")
-        logger.warning("Multi-Agent endpoints will not be available")
+        except Exception as e:
+            logger.error(f"Failed to initialize Multi-Agent System: {e}")
+            logger.warning("Multi-Agent endpoints will not be available")
+    else:
+        logger.warning("Multi-Agent initialization disabled (ENABLE_MULTI_AGENT=false)")
 
     yield
 
     # Cleanup on shutdown
     logger.info("Shutting down EduLen AI Service...")
-    chroma_manager.close()
+    if settings.ENABLE_CHROMA:
+        chroma_manager.close()
 
     # Close MongoDB connection
-    await close_mongodb_connection()
+    if settings.ENABLE_MONGODB:
+        await close_mongodb_connection()
 
     # Shutdown multi-agent system
     if multi_agent.session_manager:

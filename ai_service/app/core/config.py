@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     AGENT_CHECKPOINT_INTERVAL: int = Field(default=5, env="AGENT_CHECKPOINT_INTERVAL")
     AGENT_SESSION_TIMEOUT_MINUTES: int = Field(default=30, env="AGENT_SESSION_TIMEOUT_MINUTES")
 
+    # Feature flags (useful for low-memory environments like small Render instances)
+    ENABLE_CHROMA: bool = Field(default=True, env="ENABLE_CHROMA")
+    ENABLE_MONGODB: bool = Field(default=True, env="ENABLE_MONGODB")
+    ENABLE_ADMISSION_MODEL_LOAD: bool = Field(default=True, env="ENABLE_ADMISSION_MODEL_LOAD")
+    ENABLE_MULTI_AGENT: bool = Field(default=True, env="ENABLE_MULTI_AGENT")
+    ENABLE_ROADMAP: bool = Field(default=True, env="ENABLE_ROADMAP")
+
     # Additional MongoDB Configuration
     MONGODB_DB_NAME: str = Field(default="edulens", env="MONGODB_DB_NAME")
     MONGODB_MAX_POOL_SIZE: int = Field(default=50, env="MONGODB_MAX_POOL_SIZE")

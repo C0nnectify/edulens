@@ -7,7 +7,6 @@ Supported providers:
 """
 
 from typing import List, Optional, Tuple
-from sentence_transformers import SentenceTransformer
 from app.config import settings
 from app.utils.logger import logger
 
@@ -18,6 +17,7 @@ class EmbeddingService:
     def __init__(self):
         """Initialize embedding service"""
         self.sentence_transformer = None
+        self._sentence_transformer_model_name: Optional[str] = None
         self.cohere_client = None
 
         logger.info("Embedding service initialized (OpenAI disabled)")
@@ -76,11 +76,14 @@ class EmbeddingService:
         try:
             model_name = model or settings.huggingface_model
 
+            # Import lazily to keep process startup memory low (important on Render/free tiers).
+            from sentence_transformers import SentenceTransformer
+
             # Load model (cached after first load)
-            if self.sentence_transformer is None or \
-               self.sentence_transformer.get_sentence_embedding_dimension() != model_name:
+            if self.sentence_transformer is None or self._sentence_transformer_model_name != model_name:
                 logger.info(f"Loading HuggingFace model: {model_name}")
                 self.sentence_transformer = SentenceTransformer(model_name)
+                self._sentence_transformer_model_name = model_name
 
             # Generate embeddings
             embeddings = self.sentence_transformer.encode(

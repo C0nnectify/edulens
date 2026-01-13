@@ -11,7 +11,6 @@ from PyPDF2 import PdfReader
 from docx import Document as DocxDocument
 from pdf2image import convert_from_bytes
 import pytesseract
-from sentence_transformers import SentenceTransformer
 from app.core.chroma_client import chroma_manager
 from app.utils.logger import logger
 
@@ -28,6 +27,7 @@ class ComprehensiveDocumentProcessor:
         """Lazy load embedding model"""
         if self.embedding_model is None:
             try:
+                from sentence_transformers import SentenceTransformer
                 self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
                 logger.info("Embedding model loaded: all-MiniLM-L6-v2")
             except Exception as e:
