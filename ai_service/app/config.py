@@ -152,6 +152,36 @@ class Settings(BaseSettings):
         else:
             return ["pdf", "docx", "txt", "png", "jpg", "jpeg"]  # Default fallback
 
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def normalize_log_level(cls, v):
+        """Normalize LOG_LEVEL for Loguru.
+
+        Loguru expects uppercase level names (e.g. INFO) or an int.
+        Render env vars are often set as lowercase (e.g. 'info').
+        """
+        if v is None:
+            return "INFO"
+
+        if isinstance(v, int):
+            return v
+
+        if isinstance(v, str):
+            raw = v.strip()
+            if raw == "":
+                return "INFO"
+            if raw.isdigit():
+                return int(raw)
+
+            upper = raw.upper()
+            aliases = {
+                "WARN": "WARNING",
+                "FATAL": "CRITICAL",
+            }
+            return aliases.get(upper, upper)
+
+        return "INFO"
+
     @property
     def max_file_size_bytes(self) -> int:
         """Convert max file size from MB to bytes"""
