@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # Google Gemini API
     GOOGLE_API_KEY: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
 
+    # Groq API
+    GROQ_API_KEY: Optional[str] = Field(default=None, env="GROQ_API_KEY")
+
     # ChromaDB Configuration
     CHROMA_PERSIST_DIRECTORY: str = Field(default="./chroma_db", env="CHROMA_PERSIST_DIRECTORY")
     CHROMA_HOST: str = Field(default="localhost", env="CHROMA_HOST")
