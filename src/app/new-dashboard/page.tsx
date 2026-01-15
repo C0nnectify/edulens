@@ -7,7 +7,7 @@ import {
   ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Loader2, 
   Trash2, Rocket, ArrowRight, Target, CheckCircle2,
   Map, Send, Upload, Activity, ListChecks, PanelRightOpen,
-  User, Settings, LogOut,
+  User, Settings, LogOut, Menu,
   type LucideIcon 
 } from "lucide-react";
 import { listSessions, renameSession, deleteSession, DocumentType } from "@/lib/api/chatOrchestrator";
@@ -161,8 +161,10 @@ function NewDashboardInner() {
   const [showDocumentTypeDropdown, setShowDocumentTypeDropdown] = useState(false);
   const [inputValue, setInputValue] = useState("");
   
-  // Sidebar state - closed by default
-  const [sidebarOpen, setSidebarOpen] = useState(true);  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);  const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
+  // Sidebar state - closed by default on mobile, open on desktop
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
 
   // Dialog state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -300,8 +302,25 @@ function NewDashboardInner() {
 
   return (
     <div className="flex h-screen bg-gray-50/50 font-sans text-gray-900">
-      {/* Left Sidebar */}
-      <aside className={`${sidebarOpen ? 'w-[280px]' : 'w-0'} bg-white/80 backdrop-blur-xl border-r border-gray-200/60 flex flex-col transition-all duration-300 overflow-hidden shadow-sm z-20`}>
+      {/* Mobile Overlay */}
+      {(sidebarOpen || rightSidebarOpen) && (
+        <div 
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => {
+            setSidebarOpen(false);
+            setRightSidebarOpen(false);
+          }}
+        />
+      )}
+
+      {/* Left Sidebar - Floating on mobile, fixed on desktop */}
+      <aside className={`
+        fixed lg:relative inset-y-0 left-0 z-40
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${sidebarOpen ? 'w-[280px]' : 'w-0 lg:w-0'}
+        bg-white/95 lg:bg-white/80 backdrop-blur-xl border-r border-gray-200/60 
+        flex flex-col transition-all duration-300 overflow-hidden shadow-xl lg:shadow-sm
+      `}>
         <div className="p-5 border-b border-gray-100">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -312,7 +331,7 @@ function NewDashboardInner() {
             </div>
             <button 
               onClick={() => setSidebarOpen(false)}
-              className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100/80 transition-colors"
+              className="lg:hidden text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100/80 transition-colors"
             >
               <X size={18} />
             </button>
@@ -494,7 +513,17 @@ function NewDashboardInner() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Hamburger Menu - Mobile Only */}
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="fixed top-4 left-4 z-20 lg:hidden p-2.5 bg-white border border-gray-200 rounded-xl shadow-lg hover:shadow-xl hover:border-gray-300 transition-all"
+            title="Open Menu"
+          >
+            <Menu size={20} className="text-gray-600" />
+          </button>
+        )}
         {viewMode === 'journey' ? (
           <FullPageJourney 
             onStartChat={handleStartChatFromJourney}
@@ -503,15 +532,15 @@ function NewDashboardInner() {
           />
         ) : (
           /* Chat-style home view - Document Builder & General Chat */
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
+          <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 pt-16 sm:pt-8">
             <div className="max-w-2xl w-full space-y-8">
               {/* Header */}
               <div className="text-center">
-                <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-600 to-violet-600 rounded-2xl flex items-center justify-center shadow-xl mb-4">
-                  <Sparkles size={32} className="text-white" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto bg-gradient-to-br from-blue-600 to-violet-600 rounded-2xl flex items-center justify-center shadow-xl mb-4">
+                  <Sparkles size={24} className="text-white sm:w-8 sm:h-8" />
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Document Builder & Chat</h1>
-                <p className="text-gray-500">Select a document type to build, or just chat about anything</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Document Builder & Chat</h1>
+                <p className="text-sm sm:text-base text-gray-500">Select a document type to build, or just chat about anything</p>
               </div>
 
               {/* Input Area */}
@@ -623,7 +652,7 @@ function NewDashboardInner() {
 
         {/* Bottom Input Bar (only shown in journey mode) - Roadmap focused */}
         {viewMode === 'journey' && (
-          <div className="bg-white border-t border-gray-200 p-4">
+          <div className="bg-white border-t border-gray-200 p-3 sm:p-4">
             <div className="max-w-3xl mx-auto">
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl p-2 focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100">
                 {/* Journey context indicator */}
@@ -656,12 +685,18 @@ function NewDashboardInner() {
         )}
       </main>
 
-      {/* Right Sidebar - Quick Access */}
-      <aside className={`${rightSidebarOpen ? 'w-64' : 'w-0'} bg-white/50 backdrop-blur-sm border-l border-gray-200/60 flex flex-col transition-all duration-300 overflow-hidden z-10`}>
+      {/* Right Sidebar - Quick Access - Floating on mobile */}
+      <aside className={`
+        fixed lg:relative inset-y-0 right-0 z-40
+        ${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
+        ${rightSidebarOpen ? 'w-64' : 'w-0 lg:w-0'}
+        bg-white/95 lg:bg-white/50 backdrop-blur-sm border-l border-gray-200/60 
+        flex flex-col transition-all duration-300 overflow-hidden shadow-xl lg:shadow-none
+      `}>
         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-xs uppercase tracking-wider text-gray-400 font-bold">Quick Access</h3>
           <button onClick={() => setRightSidebarOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
-            <X size={14} />
+            <X size={16} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
@@ -695,10 +730,10 @@ function NewDashboardInner() {
       {!rightSidebarOpen && (
         <button
           onClick={() => setRightSidebarOpen(true)}
-          className="fixed right-4 top-1/2 -translate-y-1/2 p-2 bg-white border border-gray-200 rounded-xl shadow-lg hover:shadow-xl hover:border-gray-300 transition-all z-20"
+          className="fixed right-4 top-4 lg:top-1/2 lg:-translate-y-1/2 p-2.5 bg-white border border-gray-200 rounded-xl shadow-lg hover:shadow-xl hover:border-gray-300 transition-all z-20"
           title="Open Quick Access"
         >
-          <PanelRightOpen size={18} className="text-gray-600" />
+          <PanelRightOpen size={20} className="text-gray-600" />
         </button>
       )}
 

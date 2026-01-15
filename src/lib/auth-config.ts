@@ -31,11 +31,23 @@ let client: MongoClient;
 
 if (process.env.NODE_ENV === "development") {
   if (!globalWithMongo._betterAuthMongoClient) {
-    globalWithMongo._betterAuthMongoClient = new MongoClient(mongoUrl);
+    globalWithMongo._betterAuthMongoClient = new MongoClient(mongoUrl, {
+      maxPoolSize: 10,
+      minPoolSize: 2,
+      maxIdleTimeMS: 60000,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
   }
   client = globalWithMongo._betterAuthMongoClient;
 } else {
-  client = new MongoClient(mongoUrl);
+  client = new MongoClient(mongoUrl, {
+    maxPoolSize: 10,
+    minPoolSize: 2,
+    maxIdleTimeMS: 60000,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  });
 }
 
 const dbName = process.env.MONGODB_DB_NAME || getDbNameFromUri(mongoUrl) || "edulens";
