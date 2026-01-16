@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Menu, X, User } from 'lucide-react';
+import { X, User } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
 
@@ -20,6 +20,17 @@ const NewNavigation = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
 
   const navItems = [
     { label: 'Product', href: '#product' },
@@ -99,61 +110,93 @@ const NewNavigation = () => {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2 text-[#0F1724] hover:text-[#5C6BFF] transition-colors"
+            className="md:hidden p-2 rounded-lg text-[#0F1724] hover:text-[#5C6BFF] hover:bg-[#5C6BFF]/10 transition-colors"
             aria-label="Toggle menu"
             aria-expanded={isMobileMenuOpen}
           >
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {isMobileMenuOpen ? (
+              <X size={24} />
+            ) : (
+              <span className="inline-flex flex-col items-end justify-center gap-1.5" aria-hidden="true">
+                <span className="h-[2px] w-6 bg-current rounded-full" />
+                <span className="h-[2px] w-4 bg-current rounded-full" />
+                <span className="h-[2px] w-6 bg-current rounded-full" />
+              </span>
+            )}
           </button>
         </div>
+      </div>
 
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden mt-4 pb-4 border-t border-gray-200 pt-4">
-            <div className="flex flex-col space-y-4">
-              {navItems.map((item) => (
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          <div className="absolute inset-x-0 top-0 bg-white shadow-2xl border-b border-gray-200">
+            <div className="px-4 sm:px-6 pt-6 pb-4">
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold text-[#0F1724]">Menu</div>
+                <button
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 rounded-lg text-[#0F1724] hover:text-[#5C6BFF] hover:bg-[#5C6BFF]/10 transition-colors"
+                  aria-label="Close menu"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-4 sm:px-6 pb-6">
+              <div className="flex flex-col gap-2">
+                {navItems.map((item) => (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="text-[#0F1724] hover:text-[#5C6BFF] transition-colors font-medium text-base py-2.5 px-3 rounded-lg hover:bg-[#5C6BFF]/10"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    {item.label}
+                  </a>
+                ))}
                 <a
-                  key={item.label}
-                  href={item.href}
-                  className="text-[#0F1724] hover:text-[#5C6BFF] transition-colors font-medium"
+                  href="#how-it-works"
+                  className="text-[#5C6BFF] hover:text-[#7C4DFF] transition-colors font-medium text-base py-2.5 px-3 rounded-lg hover:bg-[#5C6BFF]/10"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  {item.label}
+                  See How It Works
                 </a>
-              ))}
-              <a
-                href="#how-it-works"
-                className="text-[#5C6BFF] hover:text-[#7C4DFF] transition-colors font-medium"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                See How It Works
-              </a>
-              {session?.user ? (
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    router.push('/dashboard');
-                  }}
-                  className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-3 rounded-full font-semibold shadow-lg w-full flex items-center justify-center gap-2"
-                >
-                  <User size={18} />
-                  {session.user.name?.split(' ')[0] || 'Dashboard'}
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    router.push('/signin');
-                  }}
-                  className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-3 rounded-full font-semibold shadow-lg w-full"
-                >
-                  Login
-                </button>
-              )}
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 gap-3">
+                {session?.user ? (
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      router.push('/dashboard');
+                    }}
+                    className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-3 rounded-full font-semibold shadow-lg w-full flex items-center justify-center gap-2"
+                  >
+                    <User size={18} />
+                    {session.user.name?.split(' ')[0] || 'Dashboard'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      router.push('/signin');
+                    }}
+                    className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-3 rounded-full font-semibold shadow-lg w-full"
+                  >
+                    Login
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </nav>
   );
 };

@@ -47,23 +47,23 @@ const HomeClient: React.FC<HomeClientProps> = ({
   return (
     <>
       {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-cyan-50">
+      <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-cyan-50 pt-24 sm:pt-28 pb-12 sm:pb-16">
         {/* Background Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080801a_1px,transparent_1px),linear-gradient(to_bottom,#8080801a_1px,transparent_1px)] bg-[size:40px_40px]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(99,102,241,0.05),transparent_50%),radial-gradient(circle_at_80%_80%,rgba(6,182,212,0.05),transparent_50%)]" />
 
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
             {/* Left Content - Static with Typing Animation */}
-            <div className="text-left">
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
-                <span className="block text-gray-900">
+            <div className="text-center lg:text-left">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-bold mb-5 sm:mb-6 leading-tight tracking-tight">
+                <span className="block text-gray-900 break-words">
                   {typedText.substring(0, 21)}
                   {typedText.length < 21 && showCursor && (
                     <span className="animate-pulse">|</span>
                   )}
                 </span>
-                <span className="block">
+                <span className="block break-words">
                   {typedText.length > 21 && (
                     <>
                       <span className="text-gray-900">a </span>
@@ -78,7 +78,7 @@ const HomeClient: React.FC<HomeClientProps> = ({
                 </span>
               </h1>
 
-              <p className="text-lg md:text-xl text-gray-600 mb-8 max-w-xl">
+              <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-7 sm:mb-8 max-w-xl mx-auto lg:mx-0">
                 The study abroad{" "}
                 <span className="relative inline-block font-bold text-gray-900 px-1">
                   co-pilot
@@ -128,13 +128,13 @@ const HomeClient: React.FC<HomeClientProps> = ({
                 onClick={() =>
                   router.push(initialIsSignedIn ? "/dashboard" : "/signup")
                 }
-                className="group bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2"
+                className="group bg-orange-500 hover:bg-orange-600 text-white px-7 sm:px-8 py-3.5 sm:py-4 rounded-xl text-base sm:text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 inline-flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 {initialIsSignedIn ? "Go to Dashboard" : "Start Your Journey"}
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
 
-              <div className="mt-6 flex items-center gap-2 text-sm text-teal-600">
+              <div className="mt-5 sm:mt-6 flex items-center justify-center lg:justify-start gap-2 text-sm text-teal-600">
                 <svg
                   className="w-5 h-5"
                   viewBox="0 0 24 24"
@@ -160,7 +160,7 @@ const HomeClient: React.FC<HomeClientProps> = ({
               className="relative"
             >
               <motion.div
-                className="relative w-full h-[500px]"
+                className="relative w-full h-[320px] sm:h-[420px] lg:h-[500px]"
                 animate={{ 
                   y: [0, -20, 0]
                 }}
@@ -685,7 +685,7 @@ const HomeClient: React.FC<HomeClientProps> = ({
             </p>
             <button
               onClick={() =>
-                router.push(initialIsSignedIn ? "/dashboard" : "/signup")
+                router.push(initialIsSignedIn ? "/new-dashboard" : "/signup")
               }
               className="group bg-white text-blue-600 hover:bg-gray-100 px-10 py-4 rounded-lg text-lg font-semibold shadow-xl hover:shadow-2xl transition-all duration-300 inline-flex items-center gap-2"
             >
