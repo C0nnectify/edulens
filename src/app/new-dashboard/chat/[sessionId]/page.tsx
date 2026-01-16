@@ -35,6 +35,7 @@ type ChatMessage = {
   documentType?: DocumentType | null;
   draftKey?: string;
   attachments?: UploadedFile[];
+  savedDocId?: string; // ID of the saved document (SOP/LOR) if already saved
 };
 
 // Document type options for Document Builder
@@ -77,6 +78,7 @@ function ChatPageInner() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [pendingMessageProcessed, setPendingMessageProcessed] = useState(false);
   const [isJourneyMode, setIsJourneyMode] = useState(false);
+  const [savingDraftId, setSavingDraftId] = useState<string | null>(null);
   const bootstrappedRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -272,6 +274,87 @@ function ChatPageInner() {
     if (type.includes("spreadsheet") || type.includes("excel")) return FileSpreadsheet;
     return File;
   };
+
+  // Save SOP/LOR draft and open in editor
+  const handleOpenInEditor = useCallback(async (message: ChatMessage) => {
+    if (!message.documentDraft || !message.documentType) return;
+    
+    const docType = message.documentType;
+    if (docType !== 'sop' && docType !== 'lor') return;
+    
+    // If already saved, just navigate to the editor with the saved ID
+    if (message.savedDocId) {
+      const basePath = docType === 'lor' 
+        ? '/dashboard/document-builder/lor-generator'
+        : '/dashboard/document-builder/sop-generator';
+      router.push(`${basePath}?id=${encodeURIComponent(message.savedDocId)}`);
+      return;
+    }
+    
+    setSavingDraftId(message.id);
+    
+    try {
+      const draft = message.documentDraft as { editor_json?: Record<string, unknown>; html?: string; title?: string };
+      const editorJson = draft.editor_json || draft;
+      const html = draft.html || '';
+      
+      // Extract title from editor JSON or use default
+      let title = draft.title || '';
+      if (!title && editorJson && typeof editorJson === 'object') {
+        const content = (editorJson as { content?: Array<{ type: string; attrs?: { level?: number }; content?: Array<{ text?: string }> }> }).content;
+        if (content) {
+          const h1 = content.find(n => n.type === 'heading' && n.attrs?.level === 1);
+          if (h1?.content) {
+            title = h1.content.map(c => c.text || '').join('');
+          }
+        }
+      }
+      if (!title) {
+        title = docType === 'lor' ? 'Letter of Recommendation' : 'My Statement of Purpose';
+      }
+      
+      // Save to database
+      const response = await fetch('/api/sop/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          editor_json: editorJson,
+          html,
+          metadata: { doc_type: docType },
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save document');
+      }
+      
+      const { sop_id } = await response.json();
+      
+      // Update the message with the saved ID so subsequent clicks use "update" mode
+      setMessages(prev => prev.map(m => 
+        m.id === message.id ? { ...m, savedDocId: sop_id } : m
+      ));
+      
+      // Navigate to editor with the saved document ID
+      const basePath = docType === 'lor' 
+        ? '/dashboard/document-builder/lor-generator'
+        : '/dashboard/document-builder/sop-generator';
+      router.push(`${basePath}?id=${encodeURIComponent(sop_id)}`);
+      
+    } catch (err) {
+      console.error('Failed to save draft:', err);
+      // Fallback: open with draftKey if save fails
+      if (message.draftKey) {
+        const basePath = docType === 'lor' 
+          ? '/dashboard/document-builder/lor-generator'
+          : '/dashboard/document-builder/sop-generator';
+        router.push(`${basePath}?draftKey=${encodeURIComponent(message.draftKey)}`);
+      }
+    } finally {
+      setSavingDraftId(null);
+    }
+  }, [router]);
 
   const onSend = useCallback(async (override?: {
     text?: string;
@@ -541,10 +624,10 @@ function ChatPageInner() {
                     <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-gray-700">Progress</span>
-                        <span className="text-xs font-bold text-blue-600">{m.progress.percentage}%</span>
+                        <span className="text-xs font-bold text-blue-600">{Math.round(m.progress.percentage)}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div className="bg-blue-600 h-1.5 rounded-full transition-all" style={{ width: `${m.progress.percentage}%` }} />
+                        <div className="bg-blue-600 h-1.5 rounded-full transition-all" style={{ width: `${Math.round(m.progress.percentage)}%` }} />
                       </div>
                     </div>
                   )}
@@ -552,15 +635,27 @@ function ChatPageInner() {
                   {/* Draft link */}
                   {m.role === "ai" && m.documentDraft && m.draftKey && (
                     <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
-                      <span className="text-xs text-blue-900">Draft ready! Open in editor to fine-tune.</span>
+                      <span className="text-xs text-blue-900">
+                        {m.savedDocId ? 'Document saved! Click to continue editing.' : 'Draft ready! Open in editor to fine-tune.'}
+                      </span>
                       {m.documentType === "lor" ? (
-                        <Link href={`/dashboard/document-builder/lor-generator?draftKey=${encodeURIComponent(m.draftKey)}`} className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-full hover:bg-blue-700">
-                          Open LOR Editor
-                        </Link>
+                        <button 
+                          onClick={() => handleOpenInEditor(m)}
+                          disabled={savingDraftId === m.id}
+                          className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-blue-400 flex items-center gap-1"
+                        >
+                          {savingDraftId === m.id && <Loader2 size={12} className="animate-spin" />}
+                          {m.savedDocId ? 'Edit LOR' : 'Open LOR Editor'}
+                        </button>
                       ) : m.documentType === "sop" ? (
-                        <Link href={`/dashboard/document-builder/sop-generator?draftKey=${encodeURIComponent(m.draftKey)}`} className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-full hover:bg-blue-700">
-                          Open SOP Editor
-                        </Link>
+                        <button 
+                          onClick={() => handleOpenInEditor(m)}
+                          disabled={savingDraftId === m.id}
+                          className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-blue-400 flex items-center gap-1"
+                        >
+                          {savingDraftId === m.id && <Loader2 size={12} className="animate-spin" />}
+                          {m.savedDocId ? 'Edit SOP' : 'Open SOP Editor'}
+                        </button>
                       ) : m.documentType === "resume" ? (
                         <Link href={`/dashboard/document-builder/resume/editor-v2?draftKey=${encodeURIComponent(m.draftKey)}`} className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-full hover:bg-blue-700">
                           Open Resume Builder

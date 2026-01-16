@@ -636,7 +636,10 @@ Return only one word from the options above.
             if state.resume_data:
                 logger.info(f"Session has resume_data with fields: {state.resume_data.get_filled_fields()}")
         else:
-            session_id = f"doc-{uuid.uuid4().hex[:12]}"
+            # Use the provided session_id if given, otherwise generate a new one
+            # This ensures consistency with the calling system's session tracking
+            if not session_id:
+                session_id = f"doc-{uuid.uuid4().hex[:12]}"
             state = create_initial_state(
                 user_id=user_id,
                 session_id=session_id,

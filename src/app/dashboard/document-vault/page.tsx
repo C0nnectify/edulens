@@ -61,46 +61,53 @@ export default function DocumentVaultPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Upload className="h-7 w-7 text-blue-600" />
-              <span>Document Vault</span>
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              A central place for all of your uploaded documents – accessible everywhere in EduLens.
-            </p>
+      <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 p-4 sm:p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 p-5 sm:p-7 shadow-sm">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-20 right-0 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-200/40 via-purple-200/20 to-transparent blur-2xl" />
+            <div className="absolute -bottom-16 left-0 h-44 w-44 rounded-full bg-gradient-to-tr from-cyan-200/40 via-blue-200/20 to-transparent blur-2xl" />
           </div>
-          <div>
-            <input
-              type="file"
-              id="file-upload"
-              className="hidden"
-              multiple
-              accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-              onChange={handleFileUpload}
-              disabled={isUploading}
-            />
-            <Button
-              onClick={() => document.getElementById('file-upload')?.click()}
-              disabled={isUploading}
-              className="gap-2"
-            >
-              {isUploading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              Upload Files
-            </Button>
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs sm:text-sm font-semibold text-indigo-600/90">File Storage</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2 mt-2">
+                <Upload className="h-6 w-6 text-blue-600" />
+                <span>Document Vault</span>
+              </h1>
+              <p className="mt-2 text-sm text-slate-600 max-w-2xl">
+                A central place for all of your uploaded documents — accessible everywhere in EduLens.
+              </p>
+            </div>
+            <div>
+              <input
+                type="file"
+                id="file-upload"
+                className="hidden"
+                multiple
+                accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                onChange={handleFileUpload}
+                disabled={isUploading}
+              />
+              <Button
+                onClick={() => document.getElementById('file-upload')?.click()}
+                disabled={isUploading}
+                className="gap-2 w-full sm:w-auto"
+              >
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Upload Files
+              </Button>
+            </div>
           </div>
         </div>
 
         <div className="space-y-4">
           {/* Upload Progress */}
           {uploadProgress.filter(p => p.status !== 'completed').length > 0 && (
-            <Card>
+            <Card className="border-slate-200/60 bg-white/90">
               <CardHeader>
                 <CardTitle className="text-sm">Uploading Files</CardTitle>
               </CardHeader>
@@ -127,7 +134,7 @@ export default function DocumentVaultPage() {
           )}
 
           {/* Files List */}
-          <Card>
+          <Card className="border-slate-200/60 bg-white/90">
             <CardHeader>
               <CardTitle>Your Documents</CardTitle>
               <CardDescription>
@@ -159,7 +166,7 @@ export default function DocumentVaultPage() {
                     return (
                       <div
                         key={file.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                        className="flex items-center justify-between p-4 border border-slate-200/60 rounded-xl hover:bg-slate-50/70 transition-colors"
                       >
                         <div className="flex items-start space-x-4 flex-1">
                           <div className="p-2 rounded bg-blue-100 text-blue-600">
@@ -197,7 +204,7 @@ export default function DocumentVaultPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-slate-200/60 bg-white/90">
             <CardHeader>
               <CardTitle>Centralized File Storage</CardTitle>
               <CardDescription>

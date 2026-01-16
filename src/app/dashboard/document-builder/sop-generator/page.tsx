@@ -30,8 +30,8 @@ function SOPGeneratorPageInner() {
   const [hasGenerated, setHasGenerated] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<Record<string, unknown> | null>(null);
-  const [hasAutoSaved, setHasAutoSaved] = useState(false);
   const [mobileEditorMode, setMobileEditorMode] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
 
   // Load existing SOPs on first mount; if URL has ID, load that doc
   useEffect(() => {
@@ -80,6 +80,17 @@ function SOPGeneratorPageInner() {
     return () => { mounted = false; };
   }, [docIdFromUrl, draftKeyFromUrl]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const handleChange = () => setIsDesktop(mediaQuery.matches);
+    handleChange();
+    mediaQuery.addEventListener('change', handleChange);
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
+  }, []);
+
   const handleSelectExisting = async (id: string) => {
     try {
       const doc = await getSOP(id);
@@ -102,7 +113,6 @@ function SOPGeneratorPageInner() {
     setSopId(null);
     setActiveSOPId(null);
     setHasGenerated(false);
-    setHasAutoSaved(false);
   };
 
   const handleFilesChange = (files: Array<{ file_id: string }>) => {
@@ -124,7 +134,6 @@ function SOPGeneratorPageInner() {
 
   const handleBackToForm = () => {
     setHasGenerated(false);
-    setHasAutoSaved(false);
   };
 
   const handleSave = async () => {
@@ -358,38 +367,8 @@ function SOPGeneratorPageInner() {
 
 
 
-  // Auto-save once right after initial generation
-  useEffect(() => {
-    const doAutoSave = async () => {
-      try {
-        if (!hasGenerated || hasAutoSaved || sopId) return;
-        const json = editorRef.current?.getJSON() || generatedContent;
-        if (!json) return;
-        const html = editorRef.current?.getHTML() || jsonToHtmlWithMarkdown(json);
-        const title = extractTitleFromEditorJSON(json) || 'My Statement of Purpose';
-
-        const response = await saveSOP({
-          sop_id: undefined,
-          title,
-          editor_json: json,
-          html,
-          metadata: { doc_type: 'sop' },
-        });
-
-        setSopId(response.sop_id);
-        setActiveSOPId(response.sop_id);
-        setHasAutoSaved(true);
-        // refresh list
-        const summaries = await listSOPs(20);
-        setExistingSOPs(summaries);
-        setSaveMessage('Auto-saved');
-        setTimeout(() => setSaveMessage(null), 2500);
-      } catch (e) {
-        console.error('Auto-save failed', e);
-      }
-    };
-    void doAutoSave();
-  }, [hasGenerated, hasAutoSaved, sopId, generatedContent]);
+  // Note: Auto-save removed - SOPs are now saved when clicking "Open SOP Editor" from chat
+  // This prevents duplicate empty SOPs from being created
 
   const handleDelete = async () => {
     if (!sopId) return;
@@ -424,12 +403,18 @@ function SOPGeneratorPageInner() {
         </div>
       ) : !hasGenerated ? (
         // Initial View: Form Only
-        <div className="max-w-7xl mx-auto p-4 lg:p-8">
-          <div className="mb-6 lg:mb-8">
-            <h1 className="text-2xl lg:text-4xl font-bold mb-2 lg:mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">AI SOP Generator</h1>
-            <p className="text-gray-600 text-sm lg:text-lg">
-              Create compelling Statements of Purpose that tell your unique story and stand out.
-            </p>
+        <div className="max-w-7xl mx-auto p-4 lg:p-8 space-y-6 lg:space-y-8">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 p-5 sm:p-7 shadow-sm">
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute -top-20 right-0 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-200/40 via-purple-200/20 to-transparent blur-2xl" />
+              <div className="absolute -bottom-16 left-0 h-44 w-44 rounded-full bg-gradient-to-tr from-cyan-200/40 via-blue-200/20 to-transparent blur-2xl" />
+            </div>
+            <div className="relative">
+              <h1 className="text-2xl lg:text-4xl font-bold mb-2 lg:mb-3 text-slate-900">AI SOP Generator</h1>
+              <p className="text-slate-600 text-sm lg:text-lg max-w-2xl">
+                Create compelling Statements of Purpose that tell your unique story and stand out.
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-8">
@@ -455,7 +440,7 @@ function SOPGeneratorPageInner() {
         // Generated View: Resizable AI Chat | Editor
         <div className="h-[calc(100vh-4rem)] flex flex-col">
           {/* Header */}
-          <div className="bg-white border-b px-3 lg:px-4 py-2 lg:py-3">
+          <div className="bg-white/90 border-b border-slate-200/60 px-3 lg:px-4 py-2 lg:py-3 backdrop-blur">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 lg:gap-3">
                 <Button
@@ -513,19 +498,23 @@ function SOPGeneratorPageInner() {
           {/* Mobile: Stacked Layout, Desktop: Resizable */}
           <div className="flex-1 flex flex-col lg:hidden overflow-hidden">
             {/* Mobile Tab Switcher */}
-            <div className="flex border-b bg-gray-50">
-              <button
-                className={`flex-1 py-2 text-sm font-medium ${!mobileEditorMode ? 'bg-white border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
-                onClick={() => setMobileEditorMode(false)}
-              >
-                AI Chat
-              </button>
-              <button
-                className={`flex-1 py-2 text-sm font-medium ${mobileEditorMode ? 'bg-white border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
-                onClick={() => setMobileEditorMode(true)}
-              >
-                Editor
-              </button>
+            <div className="border-b border-slate-200/60 bg-white/90 px-3 py-2">
+              <div className="mx-auto flex w-full max-w-[420px] rounded-full bg-slate-100 p-1 text-sm">
+                <button
+                  className={`flex-1 rounded-full px-3 py-2 font-medium transition ${!mobileEditorMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
+                  onClick={() => setMobileEditorMode(false)}
+                  aria-pressed={!mobileEditorMode}
+                >
+                  AI
+                </button>
+                <button
+                  className={`flex-1 rounded-full px-3 py-2 font-medium transition ${mobileEditorMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
+                  onClick={() => setMobileEditorMode(true)}
+                  aria-pressed={mobileEditorMode}
+                >
+                  Preview
+                </button>
+              </div>
             </div>
             
             {/* Mobile Content */}
@@ -550,6 +539,7 @@ function SOPGeneratorPageInner() {
           </div>
 
           {/* Desktop: Resizable Layout */}
+          {isDesktop && (
           <ResizablePanelGroup direction="horizontal" className="flex-1 hidden lg:flex">
             {/* AI Chat Panel */}
             <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
@@ -574,6 +564,7 @@ function SOPGeneratorPageInner() {
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
+          )}
         </div>
       )}
     </DashboardLayout>

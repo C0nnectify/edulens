@@ -191,11 +191,11 @@ class SOPCollectedData(BaseModel):
         """Check if we have enough info to generate."""
         return len(self.get_missing_critical_fields()) == 0
 
-    def get_completion_percentage(self) -> float:
-        """Calculate how complete the data collection is."""
+    def get_completion_percentage(self) -> int:
+        """Calculate how complete the data collection is (returns integer 0-100)."""
         all_required = SOP_REQUIRED_FIELDS["critical"] + SOP_REQUIRED_FIELDS["important"]
         filled = [f for f in all_required if f in self.get_filled_fields()]
-        return (len(filled) / len(all_required)) * 100
+        return int(round((len(filled) / len(all_required)) * 100))
 
 
 class LORCollectedData(BaseModel):
@@ -252,11 +252,11 @@ class LORCollectedData(BaseModel):
         """Check if we have enough info to generate."""
         return len(self.get_missing_critical_fields()) == 0
 
-    def get_completion_percentage(self) -> float:
-        """Calculate how complete the data collection is."""
+    def get_completion_percentage(self) -> int:
+        """Calculate how complete the data collection is (returns integer 0-100)."""
         all_required = LOR_REQUIRED_FIELDS["critical"] + LOR_REQUIRED_FIELDS["important"]
         filled = [f for f in all_required if f in self.get_filled_fields()]
-        return (len(filled) / len(all_required)) * 100
+        return int(round((len(filled) / len(all_required)) * 100))
 
 
 class ResumeCollectedData(BaseModel):
@@ -313,11 +313,11 @@ class ResumeCollectedData(BaseModel):
         """Check if we have enough info to generate."""
         return len(self.get_missing_critical_fields()) == 0
 
-    def get_completion_percentage(self) -> float:
-        """Calculate how complete the data collection is."""
+    def get_completion_percentage(self) -> int:
+        """Calculate how complete the data collection is (returns integer 0-100)."""
         all_required = RESUME_REQUIRED_FIELDS["critical"] + RESUME_REQUIRED_FIELDS["important"]
         filled = [f for f in all_required if f in self.get_filled_fields()]
-        return (len(filled) / len(all_required)) * 100
+        return int(round((len(filled) / len(all_required)) * 100))
 
 
 # ==============================================================================
@@ -408,8 +408,7 @@ class DocumentBuilderState(BaseModel):
     draft_history: List[GeneratedDocument] = Field(default_factory=list)
     
     # Progress tracking
-    completion_percentage: float = 0.0
-    
+    completion_percentage: int = 0
     # Error handling
     errors: List[str] = Field(default_factory=list)
     retry_count: int = 0
@@ -452,12 +451,12 @@ class DocumentBuilderState(BaseModel):
             return data.is_ready_for_generation()
         return False
 
-    def get_completion_percentage(self) -> float:
-        """Get overall completion percentage."""
+    def get_completion_percentage(self) -> int:
+        """Get overall completion percentage (integer 0-100)."""
         data = self.get_collected_data()
         if data:
             return data.get_completion_percentage()
-        return 0.0
+        return 0
 
 
 # ==============================================================================
@@ -476,7 +475,7 @@ class DocumentProgress(BaseModel):
     """Progress information for document creation."""
     collected_fields: List[str]
     missing_fields: List[str]
-    percentage: float
+    percentage: int  # Integer 0-100
     ready_for_generation: bool
 
 

@@ -426,49 +426,56 @@ export default function MonitoringAgentPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 p-4 sm:p-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center space-x-2 mb-2">
-              <Monitor className="h-8 w-8 text-blue-600" />
-              <h1 className="text-3xl font-bold text-gray-900">Monitoring Agent</h1>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={isMonitoringActive}
-                  onCheckedChange={setIsMonitoringActive}
-                />
-                <span className="text-sm text-gray-600">
-                  {isMonitoringActive ? 'Active' : 'Paused'}
-                </span>
-              </div>
-            </div>
-            <p className="text-gray-600">
-              Monitor websites, LinkedIn profiles, scholarships, and admission deadlines automatically.
-            </p>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 p-5 sm:p-7 shadow-sm">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-20 right-0 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-200/40 via-purple-200/20 to-transparent blur-2xl" />
+            <div className="absolute -bottom-16 left-0 h-44 w-44 rounded-full bg-gradient-to-tr from-cyan-200/40 via-blue-200/20 to-transparent blur-2xl" />
           </div>
-          <div className="flex space-x-2">
-            <Button 
-              variant="outline"
-              onClick={() => setIsSettingsModalOpen(true)}
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
-            <Button 
-              className="bg-blue-600 hover:bg-blue-700"
-              onClick={() => setIsAddMonitorModalOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Monitor
-            </Button>
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center space-x-2 mb-2">
+                <Monitor className="h-6 w-6 text-blue-600" />
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Monitoring Agent</h1>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={isMonitoringActive}
+                    onCheckedChange={setIsMonitoringActive}
+                  />
+                  <span className="text-sm text-slate-600">
+                    {isMonitoringActive ? 'Active' : 'Paused'}
+                  </span>
+                </div>
+              </div>
+              <p className="text-slate-600 text-sm sm:text-base max-w-2xl">
+                Monitor websites, LinkedIn profiles, scholarships, and admission deadlines automatically.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsSettingsModalOpen(true)}
+                className="w-full sm:w-auto"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+              <Button
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white w-full sm:w-auto"
+                onClick={() => setIsAddMonitorModalOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Monitor
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
           {getOverviewStats().map((stat, index) => (
-            <Card key={index}>
+            <Card key={index} className="border-slate-200/60 bg-white/90">
               <CardContent className="p-4 text-center">
                 <stat.icon className="h-6 w-6 mx-auto mb-2 text-gray-600" />
                 <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
@@ -480,7 +487,7 @@ export default function MonitoringAgentPage() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 bg-white/90 border border-slate-200/60 rounded-xl p-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="websites">Websites</TabsTrigger>
             <TabsTrigger value="linkedin">LinkedIn</TabsTrigger>
