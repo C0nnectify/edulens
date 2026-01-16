@@ -286,7 +286,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(
     return (
       <div className="h-full flex flex-col">
         {/* Toolbar - Sticky on scroll */}
-        <div className="sticky top-0 z-10 border-b bg-gray-50 p-2 flex gap-2 flex-wrap items-center shadow-sm">
+        <div className="border-b bg-white/90 p-2 flex gap-2 flex-wrap items-center shadow-sm lg:sticky lg:top-0 lg:z-10">
           <label className="text-xs text-gray-600">Font</label>
           <select
             className="text-sm border rounded px-2 py-1"
@@ -439,7 +439,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(
           </Button>
 
         {/* Word Count Display */}
-        <div className="ml-auto flex items-center gap-3 px-4 py-1.5 bg-white rounded-md border border-gray-200 shadow-sm">
+        <div className="ml-auto hidden md:flex items-center gap-3 px-4 py-1.5 bg-white rounded-md border border-gray-200 shadow-sm">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Words</span>
             <span className="text-sm font-bold text-blue-600">{editor.storage.characterCount.words()}</span>
@@ -453,7 +453,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(
         </div>
 
         {/* Editor content - Page Layout with pagination */}
-        <div className="flex-1 overflow-auto bg-gray-100 p-8 editor-content">
+        <div className="flex-1 overflow-auto bg-gray-100 p-4 sm:p-6 lg:p-8 editor-content">
           <style jsx global>{`
             .editor-pages-container {
               width: 8.5in;
@@ -469,6 +469,24 @@ const Editor = forwardRef<EditorHandle, EditorProps>(
               box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
               box-sizing: border-box;
               position: relative;
+            }
+
+            @media (max-width: 768px) {
+              .editor-pages-container {
+                width: 100%;
+              }
+
+              .editor-page {
+                width: 100%;
+                min-height: auto;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+              }
+
+              .ProseMirror {
+                min-height: 60vh;
+              }
             }
             
             .editor-page:last-child {

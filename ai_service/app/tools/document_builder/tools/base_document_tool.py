@@ -163,7 +163,9 @@ class BaseDocumentTool(ABC):
         return "\n".join(context_parts)
 
     def _extract_json(self, content: str) -> Dict[str, Any]:
-        """Extract JSON from LLM response."""
+        """Extract JSON from LLM response with robust error handling."""
+        import re
+        
         text = content.strip()
         
         # Remove markdown code fences if present
@@ -184,11 +186,47 @@ class BaseDocumentTool(ABC):
             if start != -1 and end != -1 and start < end:
                 text = text[start:end + 1]
         
+        # First attempt: direct parsing
         try:
             return json.loads(text)
-        except json.JSONDecodeError as e:
-            self.logger.warning(f"Failed to parse JSON: {e}")
-            return {}
+        except json.JSONDecodeError:
+            pass
+        
+        # Second attempt: fix common JSON issues
+        try:
+            fixed = text
+            # Remove trailing commas before } or ]
+            fixed = re.sub(r',(\s*[}\]])', r'\1', fixed)
+            # Fix unescaped newlines in strings (common LLM issue)
+            # This is tricky - we need to be careful not to break valid escapes
+            fixed = re.sub(r'(?<!\\)\n', r'\\n', fixed)
+            # Remove control characters that break JSON
+            fixed = re.sub(r'[\x00-\x1f]', ' ', fixed)
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            pass
+        
+        # Third attempt: try to extract just the plain_text field if present
+        try:
+            # Find plain_text value even in malformed JSON
+            match = re.search(r'"plain_text"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
+            if match:
+                plain_text = match.group(1)
+                plain_text = plain_text.replace('\\n', '\n').replace('\\"', '"')
+                # Also try to get title
+                title_match = re.search(r'"title"\s*:\s*"([^"]*)"', text)
+                title = title_match.group(1) if title_match else "Generated Document"
+                return {
+                    "title": title,
+                    "plain_text": plain_text,
+                    "sections": [],
+                    "word_count": len(plain_text.split())
+                }
+        except Exception:
+            pass
+        
+        self.logger.warning(f"Failed to parse JSON after all attempts")
+        return {}
 
     # =====================================================================
     # LLM HELPER METHODS WITH RUNTIME FALLBACK
@@ -401,15 +439,17 @@ class BaseDocumentTool(ABC):
         
         Returns editor-compatible JSON structure.
         """
+        import re
+        
         editor_content = {
             "type": "doc",
             "content": []
         }
         
-        # Add title
+        # Add title with center alignment
         editor_content["content"].append({
             "type": "heading",
-            "attrs": {"level": 1},
+            "attrs": {"level": 1, "textAlign": "center", "lineHeight": "1.5"},
             "content": [{"type": "text", "text": document.title}]
         })
         
@@ -418,18 +458,31 @@ class BaseDocumentTool(ABC):
             # Section heading
             editor_content["content"].append({
                 "type": "heading",
-                "attrs": {"level": 2},
+                "attrs": {"level": 2, "textAlign": "left", "lineHeight": "1.5"},
                 "content": [{"type": "text", "text": section.heading}]
             })
             
-            # Section content as paragraphs
-            paragraphs = section.content_markdown.split("\n\n")
+            # Normalize the section content to fix single-line sentence breaks
+            body = section.content_markdown.strip()
+            # 1. Preserve intentional paragraph breaks (2+ newlines)
+            normalized = re.sub(r'\n{2,}', '\n\n', body)
+            # 2. Replace single newlines with spaces
+            normalized = re.sub(r'(?<!\n)\n(?!\n)', ' ', normalized)
+            # 3. Clean up multiple spaces
+            normalized = re.sub(r' {2,}', ' ', normalized)
+            
+            # Section content as paragraphs with justify alignment
+            paragraphs = [p.strip() for p in normalized.split("\n\n") if p.strip()]
             for para in paragraphs:
-                if para.strip():
-                    editor_content["content"].append({
-                        "type": "paragraph",
-                        "content": [{"type": "text", "text": para.strip()}]
-                    })
+                editor_content["content"].append({
+                    "type": "paragraph",
+                    "attrs": {"textAlign": "justify", "lineHeight": "1.5"},
+                    "content": [{"type": "text", "text": para}]
+                })
+        
+        return editor_content
+        
+        return editor_content
         
         return editor_content
 

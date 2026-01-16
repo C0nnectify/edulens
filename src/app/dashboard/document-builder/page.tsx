@@ -214,65 +214,71 @@ export default function DocumentBuilderPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-6 lg:space-y-8 p-4 lg:p-6">
+      <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 p-4 sm:p-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 lg:gap-3 mb-2">
-              <FileText className="h-6 w-6 lg:h-8 lg:w-8 text-blue-600" />
-              <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Document Builder
-              </h1>
-              <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 text-xs">
-                AI-Powered
-              </Badge>
-            </div>
-            <p className="text-gray-600 text-sm lg:text-base">
-              Create professional documents that get you noticed
-            </p>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 p-5 sm:p-7 shadow-sm">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-20 right-0 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-200/40 via-purple-200/20 to-transparent blur-2xl" />
+            <div className="absolute -bottom-16 left-0 h-44 w-44 rounded-full bg-gradient-to-tr from-cyan-200/40 via-blue-200/20 to-transparent blur-2xl" />
           </div>
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2 lg:gap-3 mb-2">
+                <FileText className="h-6 w-6 text-blue-600" />
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                  Document Builder
+                </h1>
+                <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 text-[10px] sm:text-xs">
+                  AI-Powered
+                </Badge>
+              </div>
+              <p className="text-slate-600 text-sm sm:text-base max-w-2xl">
+                Create professional documents that get you noticed with AI-assisted drafting.
+              </p>
+            </div>
 
-          {/* Create New Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg w-full sm:w-auto">
-                <Plus className="h-4 w-4 mr-2" />
-                Create New
-                <ChevronDown className="h-4 w-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/document-builder/resume" className="flex items-center cursor-pointer">
-                  <Briefcase className="h-4 w-4 mr-2 text-blue-600" />
-                  Resume
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/document-builder/cv" className="flex items-center cursor-pointer">
-                  <GraduationCap className="h-4 w-4 mr-2 text-purple-600" />
-                  CV
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/document-builder/sop-generator" className="flex items-center cursor-pointer">
-                  <Scroll className="h-4 w-4 mr-2 text-green-600" />
-                  SOP
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/document-builder/lor-generator" className="flex items-center cursor-pointer">
-                  <Mail className="h-4 w-4 mr-2 text-indigo-600" />
-                  LOR
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            {/* Create New Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg w-full sm:w-auto">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New
+                  <ChevronDown className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/document-builder/resume" className="flex items-center cursor-pointer">
+                    <Briefcase className="h-4 w-4 mr-2 text-blue-600" />
+                    Resume
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/document-builder/cv" className="flex items-center cursor-pointer">
+                    <GraduationCap className="h-4 w-4 mr-2 text-purple-600" />
+                    CV
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/document-builder/sop-generator" className="flex items-center cursor-pointer">
+                    <Scroll className="h-4 w-4 mr-2 text-green-600" />
+                    SOP
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/document-builder/lor-generator" className="flex items-center cursor-pointer">
+                    <Mail className="h-4 w-4 mr-2 text-indigo-600" />
+                    LOR
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         {/* My Documents Section */}
         {allDocuments.length > 0 && (
-          <Card className="border-0 shadow-md">
+          <Card className="border-slate-200/60 bg-white/90 shadow-sm">
             <CardHeader className="pb-3 lg:pb-4">
               <CardTitle className="text-lg lg:text-xl font-semibold flex items-center gap-2">
                 <FileText className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
@@ -283,7 +289,7 @@ export default function DocumentBuilderPage() {
             <CardContent className="p-3 lg:p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
                 {allDocuments.map((doc) => (
-                  <Card key={`${doc.type}-${doc.id}`} className="group hover:shadow-lg transition-all duration-200 border border-gray-200">
+                  <Card key={`${doc.type}-${doc.id}`} className="group hover:shadow-lg transition-all duration-200 border border-slate-200/60 bg-white">
                     <Link 
                       href={doc.type === 'sop' 
                         ? `/dashboard/document-builder/sop-generator?id=${doc.id}` 
@@ -377,11 +383,11 @@ export default function DocumentBuilderPage() {
 
         {/* Document Type Cards - Smaller & Minimal */}
         <div>
-          <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">Create New Document</h2>
+          <h2 className="text-lg lg:text-xl font-semibold text-slate-900 mb-3 lg:mb-4">Create New Document</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
             {documentTypes.map((doc, index) => (
               <Link key={index} href={doc.href}>
-                <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-md hover:-translate-y-1 cursor-pointer h-full">
+                <Card className="group hover:shadow-xl transition-all duration-300 border border-slate-200/60 bg-white/90 hover:-translate-y-1 cursor-pointer h-full">
                   <CardContent className="p-4 lg:p-6 text-center space-y-2 lg:space-y-3">
                     <div className={`w-10 h-10 lg:w-12 lg:h-12 mx-auto rounded-xl bg-gradient-to-br ${doc.color} flex items-center justify-center shadow-md group-hover:scale-110 transition-transform`}>
                       <doc.icon className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
@@ -398,7 +404,7 @@ export default function DocumentBuilderPage() {
         </div>
 
         {/* Features Section */}
-        <Card className="border-0 shadow-md bg-gradient-to-br from-blue-50 to-purple-50">
+        <Card className="border-slate-200/60 shadow-sm bg-gradient-to-br from-blue-50 to-purple-50">
           <CardContent className="p-8">
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Why Use Our Document Builder?</h2>

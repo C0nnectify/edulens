@@ -183,19 +183,50 @@ class SOPTool(BaseDocumentTool):
     ) -> Dict[str, Any]:
         """
         Extract SOP-relevant information from user's message.
+        Now delegates to extract_and_respond for AI-driven extraction with contextual responses.
+        """
+        self.logger.info(f"=== extract_info_from_message called ===")
+        self.logger.info(f"Message length: {len(message)}")
+        
+        result = await self.extract_and_respond(message, state)
+        
+        self.logger.info(f"extract_and_respond returned keys: {list(result.keys())}")
+        
+        # Store the AI response in state metadata for later use
+        if "ai_response" in result and result["ai_response"]:
+            self.logger.info(f"Storing AI response in metadata: {result['ai_response'][:100]}...")
+            state.metadata["pending_ai_response"] = result["ai_response"]
+        else:
+            self.logger.warning("No ai_response in result!")
+            
+        if "ready_for_generation" in result:
+            state.metadata["ai_says_ready"] = result["ready_for_generation"]
+        
+        # Return just the extracted data for compatibility
+        extracted = result.get("extracted_data", {})
+        self.logger.info(f"Returning extracted_data with keys: {list(extracted.keys()) if extracted else 'empty'}")
+        return extracted
+
+    async def extract_and_respond(
+        self, message: str, state: DocumentBuilderState
+    ) -> Dict[str, Any]:
+        """
+        Extract SOP data and generate a contextual AI response.
         
         Uses LLM to understand context and extract:
         - Program/university mentions
         - Background information
         - Experience details
         - Goals and motivations
-
-        In addition to the user's message, this function also looks at any
-        uploaded attachments (CVs, transcripts, etc.) attached to the
-        current session so it can infer as much as possible before asking
-        follow-up questions.
+        
+        Then generates a specific, contextual response acknowledging what was provided.
         """
+        self.logger.info("=== extract_and_respond for SOP ===")
+        
         attachment_context = await self._get_attachment_text(state)
+        
+        # Get current filled fields for context
+        current_filled = state.sop_data.get_filled_fields() if state.sop_data else []
 
         extraction_prompt = f"""
 Analyze the following message and extract any information relevant to a Statement of Purpose.
@@ -208,7 +239,7 @@ Attachment Context (from uploaded files, if any):
 
 Current Context:
 - Current topic being discussed: {state.current_topic or "general"}
-- Fields already collected: {state.sop_data.get_filled_fields() if state.sop_data else []}
+- Fields already collected: {current_filled}
 
 Extract and return a JSON object with the following structure. Only include fields where you found relevant information:
 
@@ -237,6 +268,7 @@ Extract and return a JSON object with the following structure. Only include fiel
 Only include fields where the user actually provided information. Use null for fields not mentioned.
 Return valid JSON only.
 """
+        extracted = {}
         try:
             response = self._invoke_with_fallback([
                 SystemMessage(content="You are an information extraction assistant. Extract structured data from text."),
@@ -244,13 +276,162 @@ Return valid JSON only.
             ])
             
             extracted = self._extract_json(response.content)
-            
             # Filter out null values
-            return {k: v for k, v in extracted.items() if v is not None and v != ""}
+            extracted = {k: v for k, v in extracted.items() if v is not None and v != ""}
             
         except Exception as e:
             self.logger.error(f"Info extraction failed: {e}")
-            return {}
+            extracted = {}
+        
+        self.logger.info(f"Extracted fields: {list(extracted.keys())}")
+        
+        # Merge with existing data to calculate completeness
+        current_data = {}
+        if state.sop_data:
+            current_data = {k: v for k, v in state.sop_data.model_dump().items() if v}
+        
+        all_data = {**current_data, **extracted}
+        
+        # Calculate what we have and what's missing
+        filled_fields = [k for k, v in all_data.items() if v]
+        critical_fields = ["target_program", "target_university"]
+        important_fields = ["educational_background", "relevant_experience", "career_goals"]
+        
+        missing_critical = [f for f in critical_fields if f not in filled_fields]
+        has_important = any(f in filled_fields for f in important_fields)
+        ready = len(missing_critical) == 0 and has_important
+        
+        self.logger.info(f"Filled: {filled_fields}")
+        self.logger.info(f"Missing critical: {missing_critical}")
+        self.logger.info(f"Ready: {ready}")
+        
+        # Generate contextual response
+        response = self._generate_sop_response(
+            all_data, filled_fields, missing_critical, ready, extracted
+        )
+        self.logger.info(f"Generated response: {response[:100]}...")
+        
+        return {
+            "extracted_data": extracted,
+            "ai_response": response,
+            "ready_for_generation": ready,
+            "missing_critical": missing_critical
+        }
+    
+    def _generate_sop_response(
+        self, 
+        data: Dict[str, Any], 
+        filled: List[str], 
+        missing_critical: List[str],
+        ready: bool,
+        newly_extracted: Dict[str, Any]
+    ) -> str:
+        """Generate a contextual SOP response based on extracted data."""
+        
+        # Get key info for personalization
+        program = data.get("target_program", "")
+        university = data.get("target_university", "")
+        background = data.get("educational_background", "")
+        experience = data.get("relevant_experience", "")
+        goals = data.get("career_goals", "")
+        
+        # Build acknowledgment of what was just provided
+        newly_extracted_keys = list(newly_extracted.keys())
+        ack_parts = []
+        
+        if newly_extracted_keys:
+            if "target_program" in newly_extracted_keys and "target_university" in newly_extracted_keys:
+                ack_parts.append(f"**{program}** at **{university}** – excellent choice!")
+            elif "target_program" in newly_extracted_keys:
+                ack_parts.append(f"Got it – you're interested in **{program}**.")
+            elif "target_university" in newly_extracted_keys:
+                ack_parts.append(f"**{university}** is noted!")
+            
+            if "educational_background" in newly_extracted_keys:
+                ack_parts.append("Thanks for sharing your academic background.")
+            if "relevant_experience" in newly_extracted_keys:
+                ack_parts.append("Your experience sounds impressive!")
+            if "research_experience" in newly_extracted_keys:
+                ack_parts.append("Great research background!")
+            if "career_goals" in newly_extracted_keys:
+                ack_parts.append("I understand your career aspirations.")
+            if "projects" in newly_extracted_keys:
+                ack_parts.append("Those projects will strengthen your SOP.")
+        
+        # If nothing meaningful was extracted but message had content
+        if not ack_parts and len(newly_extracted_keys) == 0:
+            ack_parts.append("Thanks for sharing!")
+        
+        acknowledgment = " ".join(ack_parts) if ack_parts else ""
+        
+        if ready:
+            # Ready to generate
+            parts = []
+            if acknowledgment:
+                parts.append(acknowledgment)
+            parts.append("\n\nI now have enough information to draft your SOP!")
+            
+            # Show what we captured
+            captured = []
+            if program:
+                captured.append(f"Program: {program}")
+            if university:
+                captured.append(f"University: {university}")
+            if background:
+                captured.append("your educational background")
+            if experience:
+                captured.append("your experience")
+            if goals:
+                captured.append("your career goals")
+            
+            if captured:
+                parts.append(f"\n\n**Summary:** {', '.join(captured[:4])}")
+            
+            parts.append('\n\nSay **"Generate SOP"** when you\'re ready, or feel free to add more details!')
+            return "".join(parts)
+        
+        elif missing_critical:
+            # Need critical info
+            parts = []
+            if acknowledgment:
+                parts.append(acknowledgment + "\n\n")
+            
+            if "target_program" in missing_critical and "target_university" in missing_critical:
+                parts.append("To tailor your SOP, I need to know:\n")
+                parts.append("- **What program** are you applying for? (e.g., MS in Computer Science)\n")
+                parts.append("- **Which university** are you targeting?")
+            elif "target_program" in missing_critical:
+                parts.append("What **program or field** are you applying for?")
+            elif "target_university" in missing_critical:
+                parts.append("Which **university or universities** are you targeting for this SOP?")
+            
+            return "".join(parts)
+        
+        else:
+            # Have critical info but missing important content
+            parts = []
+            if acknowledgment:
+                parts.append(acknowledgment + "\n\n")
+            
+            # Ask for what's missing
+            missing_important = []
+            if not background:
+                missing_important.append("educational background")
+            if not experience:
+                missing_important.append("relevant experience (work, research, projects)")
+            if not goals:
+                missing_important.append("career goals")
+            
+            if missing_important:
+                if program and university:
+                    parts.append(f"Great choice targeting {program} at {university}!\n\n")
+                parts.append(f"To write a compelling SOP, please share your **{missing_important[0]}**.")
+                if len(missing_important) > 1:
+                    parts.append(f"\n\nLater I'll also ask about: {', '.join(missing_important[1:])}")
+            else:
+                parts.append("Would you like to add any personal stories or unique aspects that make you stand out?")
+            
+            return "".join(parts)
 
     def update_state_with_extracted_info(
         self, state: DocumentBuilderState, extracted_info: Dict[str, Any]
@@ -372,7 +553,8 @@ Return valid JSON only.
                 HumanMessage(content=prompt),
             ])
 
-            result = self._extract_json(response.content)
+            raw_content = response.content
+            result = self._extract_json(raw_content)
 
             # Prefer a single continuous body of text for the SOP.
             plain_text = result.get("plain_text") or ""
@@ -380,6 +562,11 @@ Return valid JSON only.
                 plain_text = "\n\n".join(
                     s.get("content_markdown", "") for s in result.get("sections", [])
                 ).strip()
+            
+            # FALLBACK: If JSON parsing failed and we have no content, extract text directly
+            if not plain_text and raw_content:
+                self.logger.warning("JSON extraction failed, attempting raw text extraction")
+                plain_text = self._extract_sop_text_from_raw(raw_content, data)
 
             # Represent as a single logical section internally.
             sections = [
@@ -389,13 +576,18 @@ Return valid JSON only.
                 )
             ]
 
+            # Calculate word count if not provided
+            word_count = result.get("word_count", 0)
+            if not word_count and plain_text:
+                word_count = len(plain_text.split())
+
             document = GeneratedDocument(
                 document_id=str(uuid.uuid4()),
                 document_type=DocumentType.SOP,
                 title=result.get("title", f"Statement of Purpose for {data.target_program}"),
                 sections=sections,
                 plain_text=plain_text,
-                word_count=result.get("word_count", 0),
+                word_count=word_count,
                 target_program=data.target_program,
                 target_university=data.target_university,
                 key_strengths_highlighted=result.get("key_strengths_highlighted", []),
@@ -411,6 +603,75 @@ Return valid JSON only.
         except Exception as e:
             self.logger.error(f"SOP generation failed: {e}")
             raise
+
+    def _extract_sop_text_from_raw(self, raw_content: str, data: SOPCollectedData) -> str:
+        """
+        Extract SOP text from raw LLM response when JSON parsing fails.
+        
+        Attempts multiple strategies:
+        1. Look for "plain_text" field content directly
+        2. Extract content between common markers
+        3. Strip JSON wrapper and use remaining text
+        """
+        import re
+        
+        text = raw_content.strip()
+        
+        # Strategy 1: Try to find plain_text field content
+        plain_text_match = re.search(
+            r'"plain_text"\s*:\s*"((?:[^"\\]|\\.)*)"|"plain_text"\s*:\s*`([^`]*)`',
+            text,
+            re.DOTALL
+        )
+        if plain_text_match:
+            content = plain_text_match.group(1) or plain_text_match.group(2)
+            if content:
+                # Unescape JSON string
+                content = content.replace('\\"', '"').replace('\\n', '\n').replace('\\\\', '\\')
+                if len(content) > 100:
+                    self.logger.info(f"Extracted {len(content)} chars from plain_text field")
+                    return content.strip()
+        
+        # Strategy 2: Look for content in markdown code blocks
+        code_block_match = re.search(r'```(?:json)?\s*(.*?)```', text, re.DOTALL)
+        if code_block_match:
+            inner = code_block_match.group(1).strip()
+            # Try to extract plain_text from this
+            inner_match = re.search(r'"plain_text"\s*:\s*"((?:[^"\\]|\\.)*)"', inner, re.DOTALL)
+            if inner_match:
+                content = inner_match.group(1)
+                content = content.replace('\\"', '"').replace('\\n', '\n').replace('\\\\', '\\')
+                if len(content) > 100:
+                    self.logger.info(f"Extracted {len(content)} chars from code block")
+                    return content.strip()
+        
+        # Strategy 3: Find text that looks like SOP content (multiple sentences)
+        # Remove JSON structure and look for essay-like content
+        # Strip anything that looks like JSON syntax
+        cleaned = re.sub(r'^\s*\{', '', text)
+        cleaned = re.sub(r'\}\s*$', '', cleaned)
+        cleaned = re.sub(r'"[a-z_]+"\s*:', '', cleaned)  # Remove field names
+        cleaned = re.sub(r'[\[\]{}]', '', cleaned)  # Remove brackets
+        cleaned = re.sub(r',\s*$', '', cleaned, flags=re.MULTILINE)  # Remove trailing commas
+        
+        # Look for paragraph-like content (multiple sentences)
+        paragraphs = []
+        for chunk in cleaned.split('","'):
+            chunk = chunk.strip().strip('"').strip()
+            # Check if it looks like essay content (has sentences)
+            if len(chunk) > 50 and '.' in chunk and not chunk.startswith('{'):
+                paragraphs.append(chunk)
+        
+        if paragraphs:
+            combined = '\n\n'.join(paragraphs)
+            # Unescape
+            combined = combined.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
+            if len(combined) > 200:
+                self.logger.info(f"Extracted {len(combined)} chars using text extraction")
+                return combined.strip()
+        
+        self.logger.error("Could not extract SOP text from raw response")
+        return ""
 
     def _compile_background(self, data: SOPCollectedData) -> str:
         """Compile all background information into a single string."""
@@ -610,17 +871,18 @@ Return valid JSON only.
         The editor will show the title followed by continuous paragraphs built
         from the SOP plain_text.
         """
+        import re
 
         editor_content: Dict[str, Any] = {
             "type": "doc",
             "content": [],
         }
 
-        # Title as a single H1 node.
+        # Title as a single H1 node with center alignment.
         editor_content["content"].append(
             {
                 "type": "heading",
-                "attrs": {"level": 1},
+                "attrs": {"level": 1, "textAlign": "center", "lineHeight": "1.5"},
                 "content": [{"type": "text", "text": document.title}],
             }
         )
@@ -628,13 +890,24 @@ Return valid JSON only.
         body = document.plain_text or "\n\n".join(
             section.content_markdown for section in document.sections
         )
-        paragraphs = [p for p in body.split("\n\n") if p.strip()]
+        
+        # Normalize the text to fix single-line sentence breaks:
+        # 1. First, preserve intentional paragraph breaks (2+ newlines) with a placeholder
+        normalized = re.sub(r'\n{2,}', '\n\n', body.strip())
+        # 2. Replace single newlines with spaces (sentences on separate lines -> one paragraph)
+        normalized = re.sub(r'(?<!\n)\n(?!\n)', ' ', normalized)
+        # 3. Clean up multiple spaces
+        normalized = re.sub(r' {2,}', ' ', normalized)
+        
+        # Split into paragraphs by double newlines
+        paragraphs = [p.strip() for p in normalized.split("\n\n") if p.strip()]
 
         for para in paragraphs:
             editor_content["content"].append(
                 {
                     "type": "paragraph",
-                    "content": [{"type": "text", "text": para.strip()}],
+                    "attrs": {"textAlign": "justify", "lineHeight": "1.5"},
+                    "content": [{"type": "text", "text": para}],
                 }
             )
 

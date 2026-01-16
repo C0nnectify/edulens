@@ -231,6 +231,29 @@ export function convertJsonParagraphText(nodes: { type: string; text?: string }[
   return nodes.map(node => node.text ?? '').join('');
 }
 
+/**
+ * Check if editor JSON has meaningful content (not just a title or empty)
+ * Returns false if the document is essentially empty
+ */
+export function hasMeaningfulContent(json: Record<string, unknown> | null): boolean {
+  if (!json) return false;
+  const doc = json as TipTapDoc;
+  const content = doc.content;
+  if (!content || content.length === 0) return false;
+  
+  // Count paragraphs with actual text (not just empty paragraphs)
+  let textLength = 0;
+  for (const node of content) {
+    if (node.type === 'paragraph' || (node.type === 'heading' && (node.attrs?.level ?? 1) !== 1)) {
+      const text = convertJsonParagraphText(node.content).trim();
+      textLength += text.length;
+    }
+  }
+  
+  // Require at least 50 characters of body text (excluding H1 title)
+  return textLength >= 50;
+}
+
 export function jsonToHtmlWithMarkdown(json: Record<string, unknown>): string {
   const doc = json as TipTapDoc;
   const nodes = doc.content ?? [];

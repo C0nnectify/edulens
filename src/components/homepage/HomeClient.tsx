@@ -25,6 +25,8 @@ const HomeClient: React.FC<HomeClientProps> = ({
   const router = useRouter();
   const [typedText, setTypedText] = useState("");
   const fullText = "Your Dreams Deserve a Clear Vision";
+  const firstLineBreak = fullText.indexOf(" a ");
+  const highlightStart = fullText.indexOf("Clear");
   const [showCursor, setShowCursor] = useState(true);
   const [isTypingComplete, setIsTypingComplete] = useState(false);
 
@@ -56,19 +58,23 @@ const HomeClient: React.FC<HomeClientProps> = ({
           <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
             {/* Left Content - Static with Typing Animation */}
             <div className="text-center lg:text-left">
-              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-bold mb-5 sm:mb-6 leading-tight tracking-tight">
+              <h1 className="text-3xl sm:text-4xl md:text-4xl lg:text-6xl font-bold mb-5 sm:mb-6 leading-tight tracking-tight">
                 <span className="block text-gray-900 break-words">
-                  {typedText.substring(0, 21)}
-                  {typedText.length < 21 && showCursor && (
+                  {typedText.substring(0, firstLineBreak)}
+                  {typedText.length < firstLineBreak && showCursor && (
                     <span className="animate-pulse">|</span>
                   )}
                 </span>
                 <span className="block break-words">
-                  {typedText.length > 21 && (
+                  {typedText.length > firstLineBreak && (
                     <>
-                      <span className="text-gray-900">a </span>
+                      <span className="text-gray-900">
+                        {typedText
+                          .substring(firstLineBreak, Math.min(highlightStart, typedText.length))
+                          .trimStart()}
+                      </span>
                       <span className="text-cyan-500">
-                        {typedText.substring(23)}
+                        {typedText.substring(highlightStart)}
                       </span>
                       {!isTypingComplete && showCursor && (
                         <span className="animate-pulse text-cyan-500">|</span>
@@ -126,7 +132,7 @@ const HomeClient: React.FC<HomeClientProps> = ({
 
               <button
                 onClick={() =>
-                  router.push(initialIsSignedIn ? "/dashboard" : "/signup")
+                  router.push(initialIsSignedIn ? "/new-dashboard" : "/signup")
                 }
                 className="group bg-orange-500 hover:bg-orange-600 text-white px-7 sm:px-8 py-3.5 sm:py-4 rounded-xl text-base sm:text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 inline-flex items-center justify-center gap-2 w-full sm:w-auto"
               >

@@ -172,32 +172,38 @@ export default function ApplicationTrackerPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="max-w-7xl mx-auto space-y-8 sm:space-y-10 p-4 sm:p-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center space-x-2 mb-2">
-              <ClipboardList className="h-8 w-8 text-blue-600" />
-              <h1 className="text-3xl font-bold text-gray-900">Application Tracker</h1>
-            </div>
-            <p className="text-gray-600">
-              Monitor all your university applications in one place with real-time updates.
-            </p>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 p-5 sm:p-7 shadow-sm">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-20 right-0 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-200/40 via-purple-200/20 to-transparent blur-2xl" />
+            <div className="absolute -bottom-16 left-0 h-44 w-44 rounded-full bg-gradient-to-tr from-cyan-200/40 via-blue-200/20 to-transparent blur-2xl" />
           </div>
-          <Button 
-            className="bg-blue-600 hover:bg-blue-700"
-            onClick={() => setIsAddModalOpen(true)}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Application
-          </Button>
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center space-x-2 mb-2">
+                <ClipboardList className="h-6 w-6 text-blue-600" />
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Application Tracker</h1>
+              </div>
+              <p className="text-slate-600 text-sm sm:text-base max-w-2xl">
+                Monitor all your university applications in one place with real-time updates.
+              </p>
+            </div>
+            <Button
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white w-full sm:w-auto"
+              onClick={() => setIsAddModalOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Application
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
           {getStatusStats().map((stat, index) => (
-            <Card key={index}>
-              <CardContent className="p-6 text-center">
+            <Card key={index} className="border-slate-200/60 bg-white/90">
+              <CardContent className="p-5 sm:p-6 text-center">
                 <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
                 <p className="text-sm text-gray-600">{stat.label}</p>
               </CardContent>
@@ -206,7 +212,7 @@ export default function ApplicationTrackerPage() {
         </div>
 
         {/* Filters and Search */}
-        <Card>
+        <Card className="border-slate-200/60 bg-white/90">
           <CardContent className="p-6">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
@@ -224,7 +230,7 @@ export default function ApplicationTrackerPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  className="px-3 py-2 border border-slate-200 rounded-md text-sm bg-white"
                 >
                   <option value="all">All Status</option>
                   <option value="submitted">Submitted</option>
@@ -244,7 +250,7 @@ export default function ApplicationTrackerPage() {
         </Card>
 
         {/* Applications Table */}
-        <Card>
+        <Card className="border-slate-200/60 bg-white/90">
           <CardHeader>
             <CardTitle>Your Applications ({filteredApplications.length})</CardTitle>
             <CardDescription>

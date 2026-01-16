@@ -54,7 +54,6 @@ function LORGeneratorPageInner() {
   const [lorId, setLorId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [hasAutoSaved, setHasAutoSaved] = useState(false);
   const [existingLORs, setExistingLORs] = useState<{ id: string; title: string; created_at: string; updated_at: string }[]>([]);
   const [activeLORId, setActiveLORId] = useState<string | null>(null);
   const [initialEditorContent, setInitialEditorContent] = useState<Record<string, unknown> | null>(null);
@@ -168,7 +167,6 @@ function LORGeneratorPageInner() {
       setLorId(null);
       setActiveLORId(null);
       setHasGenerated(false);
-      setHasAutoSaved(false);
       setSaveMessage('Deleted');
       setTimeout(() => setSaveMessage(null), 2500);
     } catch (e) {
@@ -203,31 +201,8 @@ function LORGeneratorPageInner() {
     }
   };
 
-  // Auto-save once after initial generation if not manually saved yet
-  useEffect(() => {
-    const doAutoSave = async () => {
-      try {
-        if (!hasGenerated || hasAutoSaved || lorId) return;
-        const editorJson = editorRef.current?.getJSON();
-        const html = editorRef.current?.getHTML() || '';
-        if (!editorJson) return;
-        const response = await saveSOP({
-          sop_id: undefined,
-          title: `LOR for ${studentName || 'Student'}`,
-          editor_json: editorJson,
-          html,
-          metadata: { doc_type: 'lor', student_name: studentName },
-        });
-        setLorId(response.sop_id);
-        setHasAutoSaved(true);
-        setSaveMessage('Auto-saved');
-        setTimeout(() => setSaveMessage(null), 2500);
-      } catch (e) {
-        console.error('Auto-save LOR failed', e);
-      }
-    };
-    void doAutoSave();
-  }, [hasGenerated, hasAutoSaved, lorId, studentName]);
+  // Note: Auto-save removed - LORs are now saved when clicking "Open LOR Editor" from chat
+  // This prevents duplicate empty LORs from being created
 
   // Load existing LORs; only auto-load if ID or draftKey is in URL
   useEffect(() => {
@@ -325,9 +300,15 @@ function LORGeneratorPageInner() {
     <DashboardLayout>
       {!hasGenerated ? (
         <div className="max-w-7xl mx-auto p-4 lg:p-8 space-y-6 lg:space-y-8">
-          <div className="space-y-2">
-            <h1 className="text-2xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">AI LOR Generator</h1>
-            <p className="text-sm lg:text-lg text-gray-600">Generate professional Letters of Recommendation with structured evidence.</p>
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 p-5 sm:p-7 shadow-sm">
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute -top-20 right-0 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-200/40 via-purple-200/20 to-transparent blur-2xl" />
+              <div className="absolute -bottom-16 left-0 h-44 w-44 rounded-full bg-gradient-to-tr from-cyan-200/40 via-blue-200/20 to-transparent blur-2xl" />
+            </div>
+            <div className="relative space-y-2">
+              <h1 className="text-2xl lg:text-4xl font-bold text-slate-900">AI LOR Generator</h1>
+              <p className="text-sm lg:text-lg text-slate-600 max-w-2xl">Generate professional Letters of Recommendation with structured evidence.</p>
+            </div>
           </div>
           
           <div className="grid lg:grid-cols-2 gap-4 lg:gap-8">
@@ -523,7 +504,7 @@ function LORGeneratorPageInner() {
         </div>
       ) : (
         <div className="h-[calc(100vh-4rem)] flex flex-col">
-          <div className="bg-white border-b px-3 lg:px-4 py-2 lg:py-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="bg-white/90 border-b border-slate-200/60 px-3 lg:px-4 py-2 lg:py-3 flex flex-wrap items-center justify-between gap-2 backdrop-blur">
             <div className="flex items-center gap-2 lg:gap-3">
               <Button
                 variant="ghost"
@@ -572,19 +553,23 @@ function LORGeneratorPageInner() {
 
           {/* Mobile: Stacked Layout with Tabs */}
           <div className="flex-1 flex flex-col lg:hidden overflow-hidden">
-            <div className="flex border-b bg-gray-50">
-              <button
-                className={`flex-1 py-2 text-sm font-medium ${!mobileEditorMode ? 'bg-white border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
-                onClick={() => setMobileEditorMode(false)}
-              >
-                AI Chat
-              </button>
-              <button
-                className={`flex-1 py-2 text-sm font-medium ${mobileEditorMode ? 'bg-white border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
-                onClick={() => setMobileEditorMode(true)}
-              >
-                Editor
-              </button>
+            <div className="border-b border-slate-200/60 bg-white/90 px-3 py-2">
+              <div className="mx-auto flex w-full max-w-[420px] rounded-full bg-slate-100 p-1 text-sm">
+                <button
+                  className={`flex-1 rounded-full px-3 py-2 font-medium transition ${!mobileEditorMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
+                  onClick={() => setMobileEditorMode(false)}
+                  aria-pressed={!mobileEditorMode}
+                >
+                  AI
+                </button>
+                <button
+                  className={`flex-1 rounded-full px-3 py-2 font-medium transition ${mobileEditorMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
+                  onClick={() => setMobileEditorMode(true)}
+                  aria-pressed={mobileEditorMode}
+                >
+                  Preview
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-hidden">
               {!mobileEditorMode ? (

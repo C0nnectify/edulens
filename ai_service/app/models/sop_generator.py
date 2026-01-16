@@ -140,7 +140,7 @@ class InterviewSession(BaseModel):
     # Progress tracking
     total_questions: int = Field(default=0, description="Total number of questions")
     answered_questions: int = Field(default=0, description="Number of answered questions")
-    progress_percentage: float = Field(default=0.0, description="Completion percentage")
+    progress_percentage: int = Field(default=0, description="Completion percentage (0-100)")
 
     # Generated drafts
     drafts: List[SOPDraft] = Field(default_factory=list, description="Generated SOP drafts")
@@ -150,12 +150,12 @@ class InterviewSession(BaseModel):
 
     @field_validator('progress_percentage', mode='before')
     def calculate_progress(cls, v, info):
-        """Calculate progress percentage."""
+        """Calculate progress percentage as integer 0-100."""
         total = info.data.get('total_questions', 0)
         answered = info.data.get('answered_questions', 0)
         if total > 0:
-            return (answered / total) * 100
-        return 0.0
+            return int(round((answered / total) * 100))
+        return 0
 
     class Config:
         use_enum_values = True
@@ -174,7 +174,7 @@ class SessionResponse(BaseModel):
     """Response model for session operations."""
     session_id: str
     status: SessionStatus
-    progress_percentage: float
+    progress_percentage: int
     current_question: Optional[InterviewQuestion] = None
     total_questions: int
     answered_questions: int
@@ -266,7 +266,7 @@ class SOPDraftResponse(BaseModel):
 class ProgressResponse(BaseModel):
     """Response model for progress tracking."""
     session_id: str
-    progress_percentage: float
+    progress_percentage: int
     answered_questions: int
     total_questions: int
     remaining_questions: int

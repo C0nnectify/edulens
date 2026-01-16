@@ -157,19 +157,48 @@ class LORTool(BaseDocumentTool):
         self, message: str, state: DocumentBuilderState
     ) -> Dict[str, Any]:
         """Extract LOR-relevant information from user's message.
+        Now delegates to extract_and_respond for AI-driven extraction with contextual responses.
+        """
+        self.logger.info(f"=== extract_info_from_message called ===")
+        self.logger.info(f"Message length: {len(message)}")
+        
+        result = await self.extract_and_respond(message, state)
+        
+        self.logger.info(f"extract_and_respond returned keys: {list(result.keys())}")
+        
+        # Store the AI response in state metadata for later use
+        if "ai_response" in result and result["ai_response"]:
+            self.logger.info(f"Storing AI response in metadata: {result['ai_response'][:100]}...")
+            state.metadata["pending_ai_response"] = result["ai_response"]
+        else:
+            self.logger.warning("No ai_response in result!")
+            
+        if "ready_for_generation" in result:
+            state.metadata["ai_says_ready"] = result["ready_for_generation"]
+        
+        # Return just the extracted data for compatibility
+        extracted = result.get("extracted_data", {})
+        self.logger.info(f"Returning extracted_data with keys: {list(extracted.keys()) if extracted else 'empty'}")
+        return extracted
 
+    async def extract_and_respond(
+        self, message: str, state: DocumentBuilderState
+    ) -> Dict[str, Any]:
+        """
+        Extract LOR data and generate a contextual AI response.
+        
         Extracts:
         - Recommender details
         - Student information
         - Relationship context
         - Observations and achievements
 
-        In addition to the user's message, this function also looks at any
-        uploaded attachments (CVs, transcripts, etc.) attached to the
-        current session so it can infer as much as possible before asking
-        follow-up questions.
+        Then generates a specific, contextual response acknowledging what was provided.
         """
+        self.logger.info("=== extract_and_respond for LOR ===")
+        
         attachment_context = await self._get_attachment_text(state)
+        current_filled = state.lor_data.get_filled_fields() if state.lor_data else []
 
         extraction_prompt = f"""
     Analyze the following message and extract any information relevant to a Letter of Recommendation.
@@ -183,7 +212,7 @@ class LORTool(BaseDocumentTool):
 Current Context:
 - Current topic being discussed: {state.current_topic or "general"}
 - Perspective: {state.lor_data.perspective if state.lor_data else "unknown"}
-- Fields already collected: {state.lor_data.get_filled_fields() if state.lor_data else []}
+- Fields already collected: {current_filled}
 
 Extract and return a JSON object with the following structure. Only include fields where you found relevant information:
 
@@ -212,6 +241,7 @@ Extract and return a JSON object with the following structure. Only include fiel
 Only include fields where the user actually provided information. Use null for fields not mentioned.
 Return valid JSON only.
 """
+        extracted = {}
         try:
             response = self._invoke_with_fallback([
                 SystemMessage(content="You are an information extraction assistant. Extract structured data from text."),
@@ -227,7 +257,7 @@ Return valid JSON only.
                     extracted["skills_observed"] = [s.strip() for s in skills.split(",")]
 
             # Filter out null/empty values
-            return {
+            extracted = {
                 k: v
                 for k, v in extracted.items()
                 if v is not None and v != "" and v != []
@@ -235,7 +265,161 @@ Return valid JSON only.
 
         except Exception as e:
             self.logger.error(f"Info extraction failed: {e}")
-            return {}
+            extracted = {}
+        
+        self.logger.info(f"Extracted fields: {list(extracted.keys())}")
+        
+        # Merge with existing data to calculate completeness
+        current_data = {}
+        if state.lor_data:
+            current_data = {k: v for k, v in state.lor_data.model_dump().items() if v}
+        
+        all_data = {**current_data, **extracted}
+        
+        # Calculate what we have and what's missing
+        filled_fields = [k for k, v in all_data.items() if v]
+        critical_fields = ["student_name", "recommender_name", "relationship"]
+        important_fields = ["skills_observed", "achievements", "specific_examples"]
+        
+        missing_critical = [f for f in critical_fields if f not in filled_fields]
+        has_important = any(f in filled_fields for f in important_fields)
+        ready = len(missing_critical) == 0 and has_important
+        
+        self.logger.info(f"Filled: {filled_fields}")
+        self.logger.info(f"Missing critical: {missing_critical}")
+        self.logger.info(f"Ready: {ready}")
+        
+        # Generate contextual response
+        ai_response = self._generate_lor_response(
+            all_data, filled_fields, missing_critical, ready, extracted
+        )
+        self.logger.info(f"Generated response: {ai_response[:100]}...")
+        
+        return {
+            "extracted_data": extracted,
+            "ai_response": ai_response,
+            "ready_for_generation": ready,
+            "missing_critical": missing_critical
+        }
+    
+    def _generate_lor_response(
+        self, 
+        data: Dict[str, Any], 
+        filled: List[str], 
+        missing_critical: List[str],
+        ready: bool,
+        newly_extracted: Dict[str, Any]
+    ) -> str:
+        """Generate a contextual LOR response based on extracted data."""
+        
+        # Get key info for personalization
+        student_name = data.get("student_name", "")
+        recommender_name = data.get("recommender_name", "")
+        relationship = data.get("relationship", "")
+        target_program = data.get("target_program", "")
+        target_university = data.get("target_university", "")
+        skills = data.get("skills_observed", [])
+        achievements = data.get("achievements", "")
+        
+        # Build acknowledgment of what was just provided
+        newly_extracted_keys = list(newly_extracted.keys())
+        ack_parts = []
+        
+        if newly_extracted_keys:
+            if "student_name" in newly_extracted_keys:
+                ack_parts.append(f"Got it – this LOR is for **{student_name}**.")
+            if "recommender_name" in newly_extracted_keys:
+                ack_parts.append(f"Thanks, **{recommender_name}**!")
+            if "relationship" in newly_extracted_keys:
+                ack_parts.append(f"I understand your {relationship} relationship.")
+            if "target_program" in newly_extracted_keys or "target_university" in newly_extracted_keys:
+                if target_program and target_university:
+                    ack_parts.append(f"Targeting {target_program} at {target_university}.")
+                elif target_university:
+                    ack_parts.append(f"Targeting {target_university}.")
+            if "skills_observed" in newly_extracted_keys:
+                ack_parts.append("Those skills will strengthen the letter!")
+            if "achievements" in newly_extracted_keys:
+                ack_parts.append("Great achievements noted!")
+            if "specific_examples" in newly_extracted_keys:
+                ack_parts.append("Those specific examples are gold for an LOR!")
+        
+        # If nothing meaningful was extracted but message had content
+        if not ack_parts and len(newly_extracted_keys) == 0:
+            ack_parts.append("Thanks for sharing!")
+        
+        acknowledgment = " ".join(ack_parts) if ack_parts else ""
+        
+        if ready:
+            # Ready to generate
+            parts = []
+            if acknowledgment:
+                parts.append(acknowledgment)
+            parts.append("\n\nI now have enough information to draft the Letter of Recommendation!")
+            
+            # Show what we captured
+            captured = []
+            if student_name:
+                captured.append(f"Student: {student_name}")
+            if recommender_name:
+                captured.append(f"From: {recommender_name}")
+            if relationship:
+                captured.append(f"Relationship: {relationship}")
+            if skills:
+                captured.append(f"Key skills: {', '.join(skills[:3])}")
+            
+            if captured:
+                parts.append(f"\n\n**Summary:** {'; '.join(captured[:4])}")
+            
+            parts.append('\n\nSay **"Generate LOR"** when you\'re ready, or add more details about the student!')
+            return "".join(parts)
+        
+        elif missing_critical:
+            # Need critical info
+            parts = []
+            if acknowledgment:
+                parts.append(acknowledgment + "\n\n")
+            
+            if "student_name" in missing_critical and "recommender_name" in missing_critical:
+                parts.append("To create this LOR, I need to know:\n")
+                parts.append("- **Who is the student?** (name and role)\n")
+                parts.append("- **Who is the recommender?** (your name and position)")
+            elif "student_name" in missing_critical:
+                parts.append("What is the **student's name** and their role when you knew them?")
+            elif "recommender_name" in missing_critical:
+                parts.append("What is **your name and position** as the recommender?")
+            elif "relationship" in missing_critical:
+                parts.append("How do you know this student? (professor, supervisor, mentor, etc.)")
+            
+            return "".join(parts)
+        
+        else:
+            # Have critical info but missing important content
+            parts = []
+            if acknowledgment:
+                parts.append(acknowledgment + "\n\n")
+            
+            # Ask for what's missing
+            missing_important = []
+            if not skills:
+                missing_important.append("specific skills you've observed")
+            if not achievements:
+                missing_important.append("achievements or accomplishments")
+            if not data.get("specific_examples"):
+                missing_important.append("specific examples or anecdotes")
+            
+            if missing_important:
+                if student_name:
+                    parts.append(f"To write a compelling LOR for {student_name}, please share ")
+                else:
+                    parts.append("Please share ")
+                parts.append(f"**{missing_important[0]}**.")
+                if len(missing_important) > 1:
+                    parts.append(f"\n\nI'll also need: {', '.join(missing_important[1:])}")
+            else:
+                parts.append("Is there anything else unique about this student that should be highlighted?")
+            
+            return "".join(parts)
 
     def update_state_with_extracted_info(
         self, state: DocumentBuilderState, extracted_info: Dict[str, Any]
@@ -312,16 +496,18 @@ Return valid JSON only.
         The editor will show the title followed by continuous paragraphs built
         from the letter plain_text.
         """
+        import re
+        
         editor_content: Dict[str, Any] = {
             "type": "doc",
             "content": [],
         }
 
-        # Title as a single H1 node.
+        # Title as a single H1 node with center alignment.
         editor_content["content"].append(
             {
                 "type": "heading",
-                "attrs": {"level": 1},
+                "attrs": {"level": 1, "textAlign": "center", "lineHeight": "1.5"},
                 "content": [{"type": "text", "text": document.title}],
             }
         )
@@ -329,13 +515,24 @@ Return valid JSON only.
         body = document.plain_text or "\n\n".join(
             section.content_markdown for section in document.sections
         )
-        paragraphs = [p for p in body.split("\n\n") if p.strip()]
+        
+        # Normalize the text to fix single-line sentence breaks:
+        # 1. First, preserve intentional paragraph breaks (2+ newlines) with a placeholder
+        normalized = re.sub(r'\n{2,}', '\n\n', body.strip())
+        # 2. Replace single newlines with spaces (sentences on separate lines -> one paragraph)
+        normalized = re.sub(r'(?<!\n)\n(?!\n)', ' ', normalized)
+        # 3. Clean up multiple spaces
+        normalized = re.sub(r' {2,}', ' ', normalized)
+        
+        # Split into paragraphs by double newlines
+        paragraphs = [p.strip() for p in normalized.split("\n\n") if p.strip()]
 
         for para in paragraphs:
             editor_content["content"].append(
                 {
                     "type": "paragraph",
-                    "content": [{"type": "text", "text": para.strip()}],
+                    "attrs": {"textAlign": "justify", "lineHeight": "1.5"},
+                    "content": [{"type": "text", "text": para}],
                 }
             )
 
