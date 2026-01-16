@@ -567,6 +567,176 @@ Keep it positive and reassuring.
 """
 
 # ==============================================================================
+# RESUME PROMPTS
+# ==============================================================================
+
+RESUME_SYSTEM_PROMPT = """
+You are an expert Resume writer with experience in helping professionals land their target roles.
+
+Your role:
+1. Understand the user's career history, skills, and target role
+2. Collect necessary information through natural conversation
+3. Generate impactful, ATS-friendly resumes that highlight achievements
+4. Help refine and improve drafts based on feedback
+
+Core principles:
+- Every resume should be tailored to the target role
+- Use action verbs and quantifiable achievements
+- Keep format clean and ATS-compatible
+- Prioritize recent and relevant experience
+- Never fabricate skills, experiences, or achievements
+- Use industry-standard formatting
+
+Structure for Resumes:
+1. Contact Information - Name, email, phone, LinkedIn
+2. Professional Summary (optional but recommended for experienced professionals)
+3. Work Experience - Most recent first, with bullet points showing impact
+4. Education - Degrees, institutions, dates
+5. Skills - Technical and soft skills relevant to target role
+6. Additional Sections - Certifications, projects, languages, awards (as relevant)
+"""
+
+RESUME_INTENT_ANALYSIS_PROMPT = """
+Analyze the user's message to understand their resume-related intent.
+
+User message: {message}
+Current session state: {session_state}
+
+Determine:
+1. What is the user trying to do? (start new resume, provide information, request changes, ask question)
+2. What information can be extracted? (role, experience, education, skills, etc.)
+3. What information is still missing for a complete resume?
+4. What should be the next step in the conversation?
+
+Respond in JSON format:
+{{
+    "intent": "start_resume|provide_info|request_change|ask_question|confirm|other",
+    "extracted_info": {{
+        "full_name": null or "string",
+        "target_role": null or "string",
+        "work_experience": null or "string",
+        "education": null or "string",
+        "skills": null or "string",
+        "other_info": {{}}
+    }},
+    "missing_critical_fields": ["field1", "field2"],
+    "next_action": "ask_question|collect_info|generate_draft|refine_draft|complete",
+    "next_question_topic": null or "topic_key"
+}}
+"""
+
+RESUME_COLLECTION_PROMPTS = {
+    "initial_greeting": """Got it. I can build your resume from what you share here.
+
+What role are you targeting, and do you want a 1-2 line summary included?
+
+When you're ready, write "Generate Resume" and I will generate it.""",
+    
+    "target_role": "What role or position are you targeting with this resume?",
+    
+    "full_name": "What's your full name as you want it to appear on the resume?",
+    
+    "contact_info": "Please share your contact information (email, phone, LinkedIn profile).",
+    
+    "professional_summary": """Would you like to include a professional summary at the top of your resume? 
+
+If yes, briefly describe your professional background and key strengths.""",
+    
+    "work_experience": """Tell me about your work experience. For each role, please include:
+- Company name
+- Job title
+- Duration (start and end dates)
+- Key responsibilities and achievements (use numbers where possible)
+
+Start with your most recent position.""",
+    
+    "education": """What's your educational background? Please include:
+- Degree/Certification
+- Institution name
+- Graduation year (or expected)
+- GPA (if strong and recent)
+- Relevant coursework (optional)""",
+    
+    "skills": """What are your key skills? Please include:
+- Technical skills (programming languages, tools, software)
+- Soft skills (leadership, communication, problem-solving)
+- Industry-specific skills
+
+Focus on skills relevant to your target role.""",
+    
+    "certifications": "Do you have any professional certifications or licenses? If so, please list them.",
+    
+    "projects": "Would you like to highlight any significant projects? If so, please describe them briefly.",
+    
+    "languages": "Do you speak any languages other than English? Please list them with proficiency levels.",
+    
+    "awards": "Have you received any awards, honors, or recognition? Please share them.",
+    
+    "final_check": """Great! I have enough information to create your resume for the **{target_role}** role.
+
+Before I generate it, is there anything else you'd like to add or emphasize?
+
+When ready, say "Generate Resume" and I'll create it for you.""",
+}
+
+RESUME_GENERATION_PROMPT = """
+Generate a professional resume based on the following information:
+
+**Target Role:** {target_role}
+**Full Name:** {full_name}
+**Contact Information:** {contact_info}
+
+**Professional Summary:** {professional_summary}
+
+**Work Experience:**
+{work_experience}
+
+**Education:**
+{education}
+
+**Skills:**
+{skills}
+
+**Additional Information:**
+Certifications: {certifications}
+Projects: {projects}
+Languages: {languages}
+Awards: {awards}
+
+**Format Preference:** {format_preference}
+**Special Instructions:** {special_instructions}
+
+Create a well-structured, ATS-friendly resume with:
+1. Clear section headings
+2. Bullet points for work experience using action verbs
+3. Quantifiable achievements where possible
+4. Consistent formatting
+5. Appropriate length (1-2 pages based on experience level)
+
+Return the resume in markdown format with clear sections.
+"""
+
+RESUME_REFINEMENT_PROMPT = """
+Refine the following resume section based on user feedback.
+
+**Section:** {section_name}
+**Current Content:**
+{current_content}
+
+**User Feedback:**
+{feedback}
+
+**Instructions:**
+- Address the user's feedback specifically
+- Maintain professional tone and formatting
+- Use action verbs and quantifiable achievements
+- Ensure ATS compatibility
+- Keep the section length appropriate
+
+Return the refined section in markdown format.
+"""
+
+# ==============================================================================
 # HELPER FUNCTIONS
 # ==============================================================================
 
@@ -582,10 +752,18 @@ def get_lor_prompt(prompt_key: str, **kwargs) -> str:
         return LOR_COLLECTION_PROMPTS[prompt_key].format(**kwargs)
     return ""
 
+def get_resume_prompt(prompt_key: str, **kwargs) -> str:
+    """Get a Resume prompt with variables filled in."""
+    if prompt_key in RESUME_COLLECTION_PROMPTS:
+        return RESUME_COLLECTION_PROMPTS[prompt_key].format(**kwargs)
+    return ""
+
 def format_generation_prompt(document_type: str, data: Dict[str, Any]) -> str:
     """Format the generation prompt with collected data."""
     if document_type == "sop":
         return SOP_GENERATION_PROMPT.format(**data)
     elif document_type == "lor":
         return LOR_GENERATION_PROMPT.format(**data)
+    elif document_type == "resume" or document_type == "cv":
+        return RESUME_GENERATION_PROMPT.format(**data)
     return ""

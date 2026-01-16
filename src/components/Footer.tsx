@@ -45,8 +45,8 @@ const Footer = () => {
   return (
     <footer className="bg-[#0F1724] text-white py-12 sm:py-16" id="resources">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 sm:gap-10 lg:gap-12 mb-8 sm:mb-12">
-          {/* Brand Column */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-8 sm:gap-10 lg:gap-12 mb-8 sm:mb-12">
+          {/* Brand Column - takes 2 columns on large screens */}
           <div className="sm:col-span-2 lg:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
               <Image
@@ -139,10 +139,10 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Company + Legal Links */}
+          {/* Company Links */}
           <div>
             <h4 className="text-sm font-semibold mb-4 text-white">Company</h4>
-            <ul className="space-y-2 sm:space-y-3 mb-6">
+            <ul className="space-y-2 sm:space-y-3">
               {footerLinks.company.map((link, index) => (
                 <li key={index}>
                   <a href={link.href} className="text-gray-400 hover:text-white transition-colors text-xs sm:text-sm touch-manipulation inline-block py-1">
@@ -151,6 +151,10 @@ const Footer = () => {
                 </li>
               ))}
             </ul>
+          </div>
+
+          {/* Legal Links */}
+          <div>
             <h4 className="text-sm font-semibold mb-4 text-white">Legal</h4>
             <ul className="space-y-2 sm:space-y-3">
               {footerLinks.legal.map((link, index) => (

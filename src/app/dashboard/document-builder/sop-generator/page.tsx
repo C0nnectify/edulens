@@ -31,6 +31,7 @@ function SOPGeneratorPageInner() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<Record<string, unknown> | null>(null);
   const [hasAutoSaved, setHasAutoSaved] = useState(false);
+  const [mobileEditorMode, setMobileEditorMode] = useState(false);
 
   // Load existing SOPs on first mount; if URL has ID, load that doc
   useEffect(() => {
@@ -423,15 +424,15 @@ function SOPGeneratorPageInner() {
         </div>
       ) : !hasGenerated ? (
         // Initial View: Form Only
-        <div className="max-w-7xl mx-auto p-6 lg:p-8">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">AI SOP Generator</h1>
-            <p className="text-gray-600 text-lg">
+        <div className="max-w-7xl mx-auto p-4 lg:p-8">
+          <div className="mb-6 lg:mb-8">
+            <h1 className="text-2xl lg:text-4xl font-bold mb-2 lg:mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">AI SOP Generator</h1>
+            <p className="text-gray-600 text-sm lg:text-lg">
               Create compelling Statements of Purpose that tell your unique story and stand out.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-8">
             {/* Upload Section */}
             <div className="lg:col-span-2">
               <UploadPanel onFilesChange={handleFilesChange} />
@@ -452,28 +453,29 @@ function SOPGeneratorPageInner() {
         </div>
       ) : (
         // Generated View: Resizable AI Chat | Editor
-        <div className="h-[calc(100vh-4rem)]">
+        <div className="h-[calc(100vh-4rem)] flex flex-col">
           {/* Header */}
-          <div className="bg-white border-b px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+          <div className="bg-white border-b px-3 lg:px-4 py-2 lg:py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 lg:gap-3">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleBackToForm}
+                  className="px-2 lg:px-3"
                 >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
+                  <ArrowLeft className="h-4 w-4 lg:mr-2" />
+                  <span className="hidden lg:inline">Back</span>
                 </Button>
                 <div>
-                  <h2 className="text-lg font-semibold">Statement of Purpose</h2>
-                  <p className="text-xs text-gray-500">AI-powered editor</p>
+                  <h2 className="text-sm lg:text-lg font-semibold">Statement of Purpose</h2>
+                  <p className="text-xs text-gray-500 hidden sm:block">AI-powered editor</p>
                 </div>
               </div>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-1 lg:gap-2 items-center flex-wrap">
                 {existingSOPs.length > 0 && (
                   <select
-                    className="text-sm border rounded px-2 py-1"
+                    className="text-xs lg:text-sm border rounded px-1 lg:px-2 py-1 max-w-[120px] lg:max-w-none"
                     value={activeSOPId || ''}
                     onChange={(e) => handleSelectExisting(e.target.value)}
                   >
@@ -483,30 +485,72 @@ function SOPGeneratorPageInner() {
                     ))}
                   </select>
                 )}
-                <Button variant="outline" size="sm" onClick={handleNewSOP} disabled={isGenerating}>New</Button>
+                <Button variant="outline" size="sm" onClick={handleNewSOP} disabled={isGenerating} className="px-2 lg:px-3 text-xs lg:text-sm">
+                  <span className="hidden sm:inline">New</span>
+                  <span className="sm:hidden">+</span>
+                </Button>
                 {saveMessage && (
-                  <span className="text-sm text-green-600 self-center mr-2">
+                  <span className="text-xs lg:text-sm text-green-600 self-center">
                     {saveMessage}
                   </span>
                 )}
-                <Button variant="outline" size="sm" onClick={handleDownload}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
+                <Button variant="outline" size="sm" onClick={handleDownload} className="px-2 lg:px-3">
+                  <Download className="h-4 w-4 lg:mr-2" />
+                  <span className="hidden lg:inline">Download</span>
                 </Button>
-                <Button variant="destructive" size="sm" onClick={handleDelete} disabled={!sopId}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
+                <Button variant="destructive" size="sm" onClick={handleDelete} disabled={!sopId} className="px-2 lg:px-3">
+                  <Trash2 className="h-4 w-4 lg:mr-2" />
+                  <span className="hidden lg:inline">Delete</span>
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
-                  <Save className="mr-2 h-4 w-4" />
-                  {saving ? 'Saving...' : 'Save'}
+                <Button size="sm" onClick={handleSave} disabled={saving} className="px-2 lg:px-3">
+                  <Save className="h-4 w-4 lg:mr-2" />
+                  <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save'}</span>
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Resizable Layout */}
-          <ResizablePanelGroup direction="horizontal" className="h-[calc(100%-4rem)]">
+          {/* Mobile: Stacked Layout, Desktop: Resizable */}
+          <div className="flex-1 flex flex-col lg:hidden overflow-hidden">
+            {/* Mobile Tab Switcher */}
+            <div className="flex border-b bg-gray-50">
+              <button
+                className={`flex-1 py-2 text-sm font-medium ${!mobileEditorMode ? 'bg-white border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                onClick={() => setMobileEditorMode(false)}
+              >
+                AI Chat
+              </button>
+              <button
+                className={`flex-1 py-2 text-sm font-medium ${mobileEditorMode ? 'bg-white border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                onClick={() => setMobileEditorMode(true)}
+              >
+                Editor
+              </button>
+            </div>
+            
+            {/* Mobile Content */}
+            <div className="flex-1 overflow-hidden">
+              {!mobileEditorMode ? (
+                <div className="h-full overflow-auto bg-gray-50">
+                  <AIChat
+                    editorRef={editorRef}
+                    uploadedFileIds={uploadedFileIds}
+                    onGenerationStart={handleGenerationStart}
+                    onSOPGenerated={handleSOPGenerated}
+                    onGeneratedContent={handleGeneratedContent}
+                    isGenerating={true}
+                  />
+                </div>
+              ) : (
+                <div className="h-full overflow-auto bg-white">
+                  <Editor ref={editorRef} initialContent={generatedContent || undefined} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop: Resizable Layout */}
+          <ResizablePanelGroup direction="horizontal" className="flex-1 hidden lg:flex">
             {/* AI Chat Panel */}
             <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
               <div className="h-full overflow-hidden bg-gray-50">

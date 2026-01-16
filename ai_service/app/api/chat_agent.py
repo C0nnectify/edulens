@@ -186,7 +186,7 @@ def _llm_chat(system_prompt: str, user_prompt: str) -> str:
             from groq import Groq
             client = Groq(api_key=settings.groq_api_key)
             chat = client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -274,13 +274,8 @@ async def post_message(
     
     # Route document_builder to the dedicated orchestrator
     if feature_hint == "document_builder":
-        # Resume/CV drafts are generated explicitly (button-triggered) using the analysis-style
-        # extraction + structured draft synthesis.
-        doc_type = (req.document_type or "").strip().lower()
-        if doc_type in ("resume", "cv"):
-            resp = await _handle_resume_cv_builder(req, session_id, user_id)
-        else:
-            resp = await _handle_document_builder(req, session_id, user_id)
+        # ALL document types now use the LangGraph orchestrator
+        resp = await _handle_document_builder(req, session_id, user_id)
         resp.updated_summary = _update_summary_every_turn(req.session_summary or "", req.message, resp.answer)
         return resp
     if feature_hint == "analysis":

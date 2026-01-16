@@ -17,6 +17,12 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
+  Menu,
+  X,
+  Eye,
+  Edit3,
+  PanelLeftClose,
+  PanelRightClose,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -166,6 +172,10 @@ export default function EnhancedResumeBuilderV2({
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
 
+  // Mobile responsive state
+  const [mobileView, setMobileView] = useState<'steps' | 'form' | 'preview'>('form');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [instruction, setInstruction] = useState('');
   const [lastInstructionError, setLastInstructionError] = useState<string | null>(null);
 
@@ -294,10 +304,21 @@ export default function EnhancedResumeBuilderV2({
   const CurrentStepComponent = RESUME_STEPS[currentStep].component;
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Dark Sidebar - Step Navigation */}
-      <div className="w-72 bg-slate-900 text-white flex flex-col">
-        <div className="p-6 border-b border-slate-800">
+      <div className={cn(
+        "fixed lg:relative inset-y-0 left-0 z-50 w-72 bg-slate-900 text-white flex flex-col transition-transform duration-300 ease-in-out",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
+        <div className="p-4 lg:p-6 border-b border-slate-800">
           <h2 className="text-xl font-bold mb-1">{documentLabel} Builder</h2>
           <Input
             value={resume.title || ''}
@@ -367,6 +388,15 @@ export default function EnhancedResumeBuilderV2({
         </ScrollArea>
 
         <div className="p-4 border-t border-slate-800 space-y-2">
+          {/* Close button for mobile */}
+          <Button
+            onClick={() => setSidebarOpen(false)}
+            variant="ghost"
+            className="w-full lg:hidden text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            <X className="w-4 h-4 mr-2" />
+            Close Menu
+          </Button>
           <Button
             onClick={() => handleSave(false)}
             disabled={isSaving}
@@ -392,98 +422,162 @@ export default function EnhancedResumeBuilderV2({
         </div>
       </div>
 
-      {/* Main Content - Form Editor */}
-      <div className="max-w-100 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-900">
-        {/* Header */}
-        <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">
-                {RESUME_STEPS[currentStep].title}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {RESUME_STEPS[currentStep].description}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <TemplateSwitcher
-                currentTemplate={resume.template}
-                onTemplateChange={handleTemplateChange}
-                className="hidden md:inline-flex"
-              />
-              <Button
-                onClick={handlePrevious}
-                disabled={currentStep === 0}
-                variant="outline"
-                size="sm"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Previous
-              </Button>
-              <Button
-                onClick={handleNext}
-                disabled={currentStep === RESUME_STEPS.length - 1}
-                size="sm"
-              >
-                Next
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Form Content */}
-        <ScrollArea className="flex-1">
-          <div className="p-6 max-w-3xl mx-auto">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentStep}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <CurrentStepComponent
-                  resume={resume}
-                  onUpdate={updateResume}
-                  onComplete={() => markStepComplete(currentStep)}
-                />
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* Right Sidebar - Live Preview */}
-      <div className="flex-1 min-h-0 bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="font-semibold">Live Preview</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Changes appear instantly
-          </p>
-        </div>
-
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-          <div className="text-sm font-semibold mb-2">Edit by message</div>
-          <div className="flex gap-2">
-            <Input
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              placeholder='Try: "add experience Software Engineer at Acme (2023 - 2025): built X; improved Y"'
-              className="h-9"
-            />
-            <Button size="sm" onClick={handleApplyInstruction}>
-              Apply
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-h-0 lg:flex-row overflow-hidden">
+        {/* Mobile Bottom Navigation */}
+        <div className="lg:hidden flex items-center justify-between bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-2 py-2 gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarOpen(true)}
+            className="flex-shrink-0"
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+          
+          <div className="flex-1 flex justify-center gap-1">
+            <Button
+              variant={mobileView === 'form' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setMobileView('form')}
+              className="flex-1 max-w-[100px]"
+            >
+              <Edit3 className="w-4 h-4 mr-1" />
+              <span className="text-xs">Edit</span>
+            </Button>
+            <Button
+              variant={mobileView === 'preview' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setMobileView('preview')}
+              className="flex-1 max-w-[100px]"
+            >
+              <Eye className="w-4 h-4 mr-1" />
+              <span className="text-xs">Preview</span>
             </Button>
           </div>
-          <div className="text-xs text-muted-foreground mt-2">
-            Examples: set email to ... · set linkedin to ... · add project ... · add certification ... · add language ...
-          </div>
-          {lastInstructionError && (
-            <div className="text-xs text-red-600 mt-2">{lastInstructionError}</div>
-          )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleSave(false)}
+            disabled={isSaving}
+            className="flex-shrink-0"
+          >
+            <Save className="w-5 h-5" />
+          </Button>
         </div>
-        <ImprovedResumePreview resume={resume} onDownload={onExport} />
+
+        {/* Form Editor Panel */}
+        <div className={cn(
+          "flex-1 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-900",
+          mobileView === 'preview' ? 'hidden lg:flex' : 'flex',
+          "lg:max-w-[50%] xl:max-w-[45%]"
+        )}>
+          {/* Header */}
+          <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-3 lg:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base lg:text-lg font-semibold truncate">
+                  {RESUME_STEPS[currentStep].title}
+                </h3>
+                <p className="text-xs lg:text-sm text-muted-foreground truncate">
+                  {RESUME_STEPS[currentStep].description}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+                <TemplateSwitcher
+                  currentTemplate={resume.template}
+                  onTemplateChange={handleTemplateChange}
+                  className="hidden lg:inline-flex"
+                />
+                <Button
+                  onClick={handlePrevious}
+                  disabled={currentStep === 0}
+                  variant="outline"
+                  size="sm"
+                  className="px-2 lg:px-3"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline ml-1">Prev</span>
+                </Button>
+                <Button
+                  onClick={handleNext}
+                  disabled={currentStep === RESUME_STEPS.length - 1}
+                  size="sm"
+                  className="px-2 lg:px-3"
+                >
+                  <span className="hidden sm:inline mr-1">Next</span>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Form Content */}
+          <ScrollArea className="flex-1">
+            <div className="p-4 lg:p-6 max-w-3xl mx-auto">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentStep}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <CurrentStepComponent
+                    resume={resume}
+                    onUpdate={updateResume}
+                    onComplete={() => markStepComplete(currentStep)}
+                  />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </ScrollArea>
+
+          {/* Mobile Template Switcher */}
+          <div className="lg:hidden p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+            <TemplateSwitcher
+              currentTemplate={resume.template}
+              onTemplateChange={handleTemplateChange}
+              className="w-full justify-center"
+            />
+          </div>
+        </div>
+
+        {/* Right Panel - Live Preview */}
+        <div className={cn(
+          "flex-1 min-h-0 bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col",
+          mobileView === 'form' ? 'hidden lg:flex' : 'flex'
+        )}>
+          <div className="p-3 lg:p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 className="font-semibold text-sm lg:text-base">Live Preview</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Changes appear instantly
+            </p>
+          </div>
+
+          <div className="p-3 lg:p-4 border-b border-slate-200 dark:border-slate-700">
+            <div className="text-xs lg:text-sm font-semibold mb-2">Edit by message</div>
+            <div className="flex gap-2">
+              <Input
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                placeholder='Try: "add skill Python"'
+                className="h-8 lg:h-9 text-sm"
+              />
+              <Button size="sm" onClick={handleApplyInstruction} className="h-8 lg:h-9 px-2 lg:px-3">
+                Apply
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground mt-2 hidden sm:block">
+              Examples: set email to ... · add project ... · add certification ...
+            </div>
+            {lastInstructionError && (
+              <div className="text-xs text-red-600 mt-2">{lastInstructionError}</div>
+            )}
+          </div>
+          <ImprovedResumePreview resume={resume} onDownload={onExport} />
+        </div>
       </div>
     </div>
   );

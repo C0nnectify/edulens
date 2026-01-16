@@ -10,6 +10,7 @@ from .state import (
     LORStrength,
     SOPCollectedData,
     LORCollectedData,
+    ResumeCollectedData,
     DocumentSection,
     GeneratedDocument,
     DocumentBuilderState,
@@ -24,8 +25,10 @@ from .prompts import (
     DOCUMENT_BUILDER_SYSTEM_PROMPT,
     SOP_SYSTEM_PROMPT,
     LOR_SYSTEM_PROMPT,
+    RESUME_SYSTEM_PROMPT,
     get_sop_prompt,
     get_lor_prompt,
+    get_resume_prompt,
     format_generation_prompt,
 )
 
@@ -43,6 +46,7 @@ __all__ = [
     "LORStrength",
     "SOPCollectedData",
     "LORCollectedData",
+    "ResumeCollectedData",
     "DocumentSection",
     "GeneratedDocument",
     "DocumentBuilderState",
@@ -55,8 +59,10 @@ __all__ = [
     "DOCUMENT_BUILDER_SYSTEM_PROMPT",
     "SOP_SYSTEM_PROMPT",
     "LOR_SYSTEM_PROMPT",
+    "RESUME_SYSTEM_PROMPT",
     "get_sop_prompt",
     "get_lor_prompt",
+    "get_resume_prompt",
     "format_generation_prompt",
     # Orchestrator
     "DocumentBuilderOrchestrator",

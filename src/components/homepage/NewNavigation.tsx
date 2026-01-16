@@ -3,11 +3,15 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, User } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
+import { useRouter } from 'next/navigation';
 
 const NewNavigation = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { data: session } = useSession();
+  const router = useRouter();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -72,15 +76,24 @@ const NewNavigation = () => {
             >
               See How It Works
             </a>
-            <button
-              onClick={() => {
-                document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-2.5 rounded-full font-semibold text-sm shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
-              aria-label="Join Waitlist"
-            >
-              Join Waitlist
-            </button>
+            {session?.user ? (
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-2.5 rounded-full font-semibold text-sm shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center gap-2"
+                aria-label="Go to Dashboard"
+              >
+                <User size={16} />
+                {session.user.name?.split(' ')[0] || 'Dashboard'}
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push('/signin')}
+                className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-2.5 rounded-full font-semibold text-sm shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                aria-label="Login"
+              >
+                Login
+              </button>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -115,15 +128,28 @@ const NewNavigation = () => {
               >
                 See How It Works
               </a>
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-3 rounded-full font-semibold shadow-lg w-full"
-              >
-                Join Waitlist
-              </button>
+              {session?.user ? (
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    router.push('/dashboard');
+                  }}
+                  className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-3 rounded-full font-semibold shadow-lg w-full flex items-center justify-center gap-2"
+                >
+                  <User size={18} />
+                  {session.user.name?.split(' ')[0] || 'Dashboard'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    router.push('/signin');
+                  }}
+                  className="bg-gradient-to-r from-[#5C6BFF] to-[#7C4DFF] text-white px-6 py-3 rounded-full font-semibold shadow-lg w-full"
+                >
+                  Login
+                </button>
+              )}
             </div>
           </div>
         )}

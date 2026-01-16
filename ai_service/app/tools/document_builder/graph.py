@@ -27,13 +27,15 @@ from .state import (
     ActionType,
     SOPCollectedData,
     LORCollectedData,
+    ResumeCollectedData,
     DocumentProgress,
     DocumentBuilderChatResponse,
     create_initial_state,
     get_next_question_topic,
 )
 from .prompts import DOCUMENT_BUILDER_SYSTEM_PROMPT
-from .tools import SOPTool, LORTool
+from .tools import SOPTool, LORTool, ResumeTool
+
 
 logger = logging.getLogger(__name__)
 
@@ -68,26 +70,28 @@ class DocumentBuilderOrchestrator:
         self.groq_api_key = os.getenv("GROQ_API_KEY")
 
         self.llm = None
-        # Prefer Gemini if available and keyed; otherwise fall back to Groq.
-        if self.google_api_key:
-            self.llm = ChatGoogleGenerativeAI(
-                model=model_name,
-                google_api_key=self.google_api_key,
-                temperature=0.7,
-            )
-        elif self.groq_api_key:
-            logger.info("Using Groq ChatGroq as primary LLM for Document Builder")
+        # Use Groq gpt-oss-120b as primary (more reliable)
+        if self.groq_api_key:
+            logger.info("Using Groq gpt-oss-120b as primary LLM for Document Builder")
             self.llm = ChatGroq(
                 model="openai/gpt-oss-120b",
                 api_key=self.groq_api_key,
                 temperature=0.7,
             )
+        elif self.google_api_key:
+            logger.info("Using Gemini as fallback LLM for Document Builder")
+            self.llm = ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=self.google_api_key,
+                temperature=0.7,
+            )
         else:
-            logger.warning("No Google or Groq API key provided. Using mock responses.")
+            logger.warning("No Groq or Google API key provided. Using mock responses.")
         
         # Initialize tools
         self.sop_tool = SOPTool(self.llm) if self.llm else None
         self.lor_tool = LORTool(self.llm) if self.llm else None
+        self.resume_tool = ResumeTool(self.llm) if self.llm else None
         
         # Build the graph
         self.graph = self._build_graph()
@@ -165,39 +169,71 @@ class DocumentBuilderOrchestrator:
         """
         Analyze user input to understand intent and extract information.
         """
-        logger.info(f"Analyzing input: {state.last_user_message[:50]}...")
+        logger.info(f"=== _analyze_input_node ===")
+        logger.info(f"Input message: {state.last_user_message[:100]}...")
         
         # Get the appropriate tool
         tool = self._get_tool_for_type(state.document_type)
         
         if tool:
-            # Use tool to analyze intent
-            intent_result = await tool.analyze_intent(
-                state.last_user_message, 
-                state
-            )
-            
-            # Extract information from message
+            # Extract information from message (this also generates AI response)
+            # Note: extract_info_from_message modifies state.metadata directly
             extracted_info = await tool.extract_info_from_message(
                 state.last_user_message,
                 state
             )
             
+            logger.info(f"Extracted info keys: {list(extracted_info.keys()) if extracted_info else 'None'}")
+            logger.info(f"State metadata after extraction: {list(state.metadata.keys())}")
+            logger.info(f"pending_ai_response in metadata: {'pending_ai_response' in state.metadata}")
+            
+            # CRITICAL: Set last_ai_response HERE, right after extraction
+            # Don't wait for collect_info_node - LangGraph may not preserve metadata
+            if "pending_ai_response" in state.metadata:
+                ai_response = state.metadata["pending_ai_response"]
+                logger.info(f"Setting last_ai_response directly: {ai_response[:100]}...")
+                state.last_ai_response = ai_response
+            
             # Update state with extracted info
             if extracted_info:
                 state = tool.update_state_with_extracted_info(state, extracted_info)
             
-            # Store intent analysis in metadata
-            state.metadata["last_intent"] = intent_result.get("intent", "other")
-            state.metadata["extracted_info"] = extracted_info
+            # Log current state after extraction
+            data = state.get_collected_data()
+            if data:
+                logger.info(f"Filled fields: {data.get_filled_fields()}")
+                logger.info(f"Missing critical: {data.get_missing_critical_fields()}")
+                logger.info(f"Ready for generation: {data.is_ready_for_generation()}")
             
-            # Determine next action
-            if intent_result.get("intent") == "request_change" and state.draft:
+            # Check if AI says we're ready
+            ai_says_ready = state.metadata.get("ai_says_ready", False)
+            logger.info(f"AI says ready: {ai_says_ready}")
+            
+            # Store extracted info in metadata
+            state.metadata["extracted_info"] = extracted_info
+
+            # Heuristic: treat affirmative/generate replies as confirmation when ready
+            message_lower = (state.last_user_message or "").lower().strip()
+            positive_tokens = [
+                "yes", "yep", "yeah", "yup", "sure", "okay", "ok", "ready",
+                "go ahead", "go", "please", "generate", "genrate", "generte",
+                "gnerate", "create", "build", "make", "do it", "let's do it",
+                "lets do it", "proceed", "continue"
+            ]
+            is_affirmative = any(token in message_lower for token in positive_tokens)
+            is_generate_cmd = "generate resume" in message_lower or "generate" in message_lower
+            
+            # Determine next action based on AI assessment and user intent
+            data_ready = state.is_ready_for_generation() or ai_says_ready
+            
+            if state.draft and any(word in message_lower for word in ["change", "modify", "update", "edit", "refine"]):
                 state.next_action = ActionType.REFINE_DRAFT
-            elif state.is_ready_for_generation() and intent_result.get("intent") == "confirm":
+            elif data_ready and (is_affirmative or is_generate_cmd):
                 state.next_action = ActionType.GENERATE_DRAFT
             else:
                 state.next_action = ActionType.COLLECT_INFO
+            
+            logger.info(f"Next action: {state.next_action}")
         
         state.updated_at = datetime.utcnow()
         return state
@@ -205,7 +241,10 @@ class DocumentBuilderOrchestrator:
     async def _detect_document_type_node(self, state: DocumentBuilderState) -> DocumentBuilderState:
         """
         Detect document type from user's message if not already specified.
+        Also extracts information from the first message after detection.
         """
+        logger.info("=== _detect_document_type_node ===")
+        
         if state.document_type:
             return state
         
@@ -220,8 +259,10 @@ class DocumentBuilderOrchestrator:
             state.lor_data = LORCollectedData()
         elif any(word in message_lower for word in ["cv", "curriculum vitae"]):
             state.document_type = DocumentType.CV
+            state.resume_data = ResumeCollectedData()
         elif any(word in message_lower for word in ["resume", "résumé"]):
             state.document_type = DocumentType.RESUME
+            state.resume_data = ResumeCollectedData()
         else:
             # Use LLM to detect
             if self.llm:
@@ -232,9 +273,41 @@ class DocumentBuilderOrchestrator:
                     state.sop_data = SOPCollectedData()
                 elif state.document_type == DocumentType.LOR:
                     state.lor_data = LORCollectedData()
+                elif state.document_type == DocumentType.RESUME or state.document_type == DocumentType.CV:
+                    state.resume_data = ResumeCollectedData()
         
         state.phase = ConversationPhase.COLLECTING
         logger.info(f"Detected document type: {state.document_type}")
+        
+        # IMPORTANT: Now that we have a document type, extract info from the first message
+        # This ensures the first message content is processed, not just used for type detection
+        tool = self._get_tool_for_type(state.document_type)
+        if tool:
+            logger.info("Running extraction on first message after type detection...")
+            try:
+                extracted_info = await tool.extract_info_from_message(
+                    state.last_user_message,
+                    state
+                )
+                
+                logger.info(f"Extraction complete. Metadata keys: {list(state.metadata.keys())}")
+                
+                # Set AI response if available
+                if "pending_ai_response" in state.metadata and state.metadata["pending_ai_response"]:
+                    ai_response = state.metadata["pending_ai_response"]
+                    logger.info(f"Setting AI response from extraction: {ai_response[:100]}...")
+                    state.last_ai_response = ai_response
+                else:
+                    logger.warning("No pending_ai_response in metadata after extraction")
+                
+                # Update state with extracted data
+                if extracted_info:
+                    state = tool.update_state_with_extracted_info(state, extracted_info)
+                    data = state.get_collected_data()
+                    if data:
+                        logger.info(f"Filled fields: {data.get_filled_fields()}")
+            except Exception as e:
+                logger.error(f"Extraction failed: {e}", exc_info=True)
         
         return state
 
@@ -272,56 +345,61 @@ Return only one word from the options above.
 
     async def _collect_info_node(self, state: DocumentBuilderState) -> DocumentBuilderState:
         """
-        Collect information from user or generate follow-up questions.
+        This node should preserve the AI response set during extraction.
+        Only generates fallback if no response exists.
         """
-        logger.info("Collecting information...")
+        logger.info("=== _collect_info_node ===")
+        logger.info(f"Existing response: {state.last_ai_response[:80] if state.last_ai_response else 'None'}...")
         
+        # If we already have an AI response (from extraction), keep it
+        if state.last_ai_response:
+            logger.info("Keeping existing AI response")
+            return state
+        
+        # Only generate fallback if no response exists
+        logger.info("No AI response - generating fallback")
         tool = self._get_tool_for_type(state.document_type)
         if not tool:
             state.last_ai_response = "I'm not sure what type of document you want to create. Would you like to create an SOP, LOR, CV, or Resume?"
             return state
         
-        # Determine what to ask next
-        next_topic = get_next_question_topic(state)
-        
-        if next_topic:
-            question = tool.get_next_question(state, next_topic)
-            state.current_topic = next_topic
-            state.questions_asked.append(next_topic)
-            state.last_ai_response = question
+        data = state.get_collected_data()
+        if data and data.is_ready_for_generation():
+            state.last_ai_response = tool.get_next_question(state, "final_check")
+        elif data:
+            missing = data.get_missing_critical_fields()
+            if missing:
+                state.last_ai_response = tool.get_next_question(state, missing[0])
+            else:
+                state.last_ai_response = tool.get_next_question(state, "final_check")
         else:
-            # We have enough info
-            state.phase = ConversationPhase.VALIDATING
+            state.last_ai_response = "Please share your resume information - name, experience, education, and target role."
         
         return state
 
     async def _validate_state_node(self, state: DocumentBuilderState) -> DocumentBuilderState:
         """
         Validate if we have enough information to proceed.
+        IMPORTANT: Never overwrite last_ai_response - it's set by extraction.
         """
-        logger.info("Validating state...")
+        logger.info("=== _validate_state_node ===")
+        logger.info(f"Current response: {state.last_ai_response[:80] if state.last_ai_response else 'None'}...")
         
         data = state.get_collected_data()
-        # If we don't have any collected data (e.g., document type is still
-        # unknown), avoid looping indefinitely between collect/validate.
-        # In this case we simply keep asking the user to clarify and let the
-        # routing logic present the current response.
         if not data:
             state.phase = ConversationPhase.COLLECTING
             return state
 
+        # Update completion percentage
+        state.completion_percentage = data.get_completion_percentage()
+        
         if data.is_ready_for_generation():
             state.phase = ConversationPhase.VALIDATING
-            
-            # Generate confirmation message
-            tool = self._get_tool_for_type(state.document_type)
-            if tool:
-                state.last_ai_response = tool.get_next_question(state, "final_check")
         else:
-            # Need more info
             state.phase = ConversationPhase.COLLECTING
         
-        state.completion_percentage = data.get_completion_percentage() if data else 0
+        # DO NOT overwrite last_ai_response here - it was set during extraction
+        logger.info(f"Phase: {state.phase}, Completion: {state.completion_percentage}%")
         
         return state
 
@@ -453,7 +531,10 @@ Return only one word from the options above.
         if data.is_ready_for_generation():
             # Check if user confirmed
             last_intent = state.metadata.get("last_intent", "")
-            if last_intent == "confirm" or "yes" in state.last_user_message.lower():
+            msg = (state.last_user_message or "").lower()
+            affirm_tokens = ["yes", "yep", "yeah", "yup", "sure", "ok", "okay", "ready", "go ahead", "generate", "genrate", "generte", "gnerate", "create", "build", "make", "do it", "proceed", "continue"]
+            is_affirmative = any(token in msg for token in affirm_tokens)
+            if last_intent == "confirm" or is_affirmative:
                 return "ready_to_generate"
             else:
                 return "respond"
@@ -470,7 +551,10 @@ Return only one word from the options above.
             return self.sop_tool
         elif doc_type == DocumentType.LOR:
             return self.lor_tool
+        elif doc_type == DocumentType.RESUME or doc_type == DocumentType.CV:
+            return self.resume_tool
         return None
+
 
     async def _invoke_llm_with_fallback(self, messages: List[HumanMessage]) -> AIMessage:
         """Invoke orchestrator-level LLM with 429→Groq fallback.
@@ -512,6 +596,8 @@ Return only one word from the options above.
                     self.sop_tool.llm = self.llm
                 if self.lor_tool is not None:
                     self.lor_tool.llm = self.llm
+                if self.resume_tool is not None:
+                    self.resume_tool.llm = self.llm
 
                 return self.llm.invoke(messages)
 
@@ -545,6 +631,10 @@ Return only one word from the options above.
         # Get or create session
         if session_id and session_id in self.sessions:
             state = self.sessions[session_id]
+            logger.info(f"Loaded existing session {session_id}, completion: {state.completion_percentage}%")
+            # Log current data
+            if state.resume_data:
+                logger.info(f"Session has resume_data with fields: {state.resume_data.get_filled_fields()}")
         else:
             session_id = f"doc-{uuid.uuid4().hex[:12]}"
             state = create_initial_state(
@@ -553,6 +643,7 @@ Return only one word from the options above.
                 document_type=document_type,
                 initial_message=message,
             )
+            logger.info(f"Created new session {session_id}")
         
         # Update state with new message
         state.last_user_message = message
@@ -585,7 +676,26 @@ Return only one word from the options above.
                     payload = raw_result.get("state", raw_result)  # type: ignore[attr-defined]
                 except AttributeError:
                     payload = raw_result
+                
+                # Handle nested Pydantic models that might have been converted to dicts
+                if isinstance(payload, dict):
+                    # Reconstruct resume_data if it's a dict
+                    if "resume_data" in payload and isinstance(payload["resume_data"], dict):
+                        payload["resume_data"] = ResumeCollectedData(**payload["resume_data"])
+                    # Reconstruct sop_data if it's a dict
+                    if "sop_data" in payload and isinstance(payload["sop_data"], dict):
+                        from .state import SOPCollectedData
+                        payload["sop_data"] = SOPCollectedData(**payload["sop_data"])
+                    # Reconstruct lor_data if it's a dict
+                    if "lor_data" in payload and isinstance(payload["lor_data"], dict):
+                        from .state import LORCollectedData
+                        payload["lor_data"] = LORCollectedData(**payload["lor_data"])
+                
                 result_state = DocumentBuilderState(**payload)
+            
+            logger.info(f"After graph execution - completion: {result_state.completion_percentage}%")
+            if result_state.resume_data:
+                logger.info(f"Resume data fields: {result_state.resume_data.get_filled_fields()}")
 
             # Update session storage
             self.sessions[session_id] = result_state

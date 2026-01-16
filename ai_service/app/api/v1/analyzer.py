@@ -149,7 +149,7 @@ async def query(
                     from groq import Groq
                     client = Groq(api_key=settings.groq_api_key)
                     chat = client.chat.completions.create(
-                        model="llama-3.1-70b-versatile",
+                        model="openai/gpt-oss-120b",
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},

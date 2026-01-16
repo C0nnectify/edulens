@@ -111,6 +111,26 @@ LOR_REQUIRED_FIELDS = {
     ]
 }
 
+RESUME_REQUIRED_FIELDS = {
+    "critical": [
+        "full_name",
+        "target_role",
+    ],
+    "important": [
+        "contact_info",
+        "professional_summary",
+        "work_experience",
+        "education",
+    ],
+    "optional": [
+        "skills",
+        "certifications",
+        "projects",
+        "languages",
+        "awards",
+    ]
+}
+
 
 # ==============================================================================
 # COLLECTED DATA MODELS
@@ -239,6 +259,67 @@ class LORCollectedData(BaseModel):
         return (len(filled) / len(all_required)) * 100
 
 
+class ResumeCollectedData(BaseModel):
+    """Data collected for Resume generation."""
+    # Basic Info
+    full_name: Optional[str] = None
+    target_role: Optional[str] = None
+    contact_info: Optional[str] = None  # email, phone, linkedin
+    location: Optional[str] = None
+    
+    # Summary
+    professional_summary: Optional[str] = None
+    include_summary: bool = True
+    
+    # Work Experience
+    work_experience: Optional[str] = None
+    years_of_experience: Optional[int] = None
+    
+    # Education
+    education: Optional[str] = None
+    
+    # Skills
+    skills: Optional[str] = None
+    technical_skills: Optional[str] = None
+    soft_skills: Optional[str] = None
+    
+    # Additional Sections
+    certifications: Optional[str] = None
+    projects: Optional[str] = None
+    languages: Optional[str] = None
+    awards: Optional[str] = None
+    publications: Optional[str] = None
+    
+    # Preferences
+    format_preference: str = "professional"  # professional, modern, creative
+    emphasize_section: Optional[str] = None  # which section to highlight
+    special_instructions: Optional[str] = None
+
+    def get_filled_fields(self) -> List[str]:
+        """Get list of fields that have been filled."""
+        return [k for k, v in self.model_dump().items() if v is not None and v != "" and v != []]
+
+    def get_missing_critical_fields(self) -> List[str]:
+        """Get list of critical fields that are still missing."""
+        filled = self.get_filled_fields()
+        return [f for f in RESUME_REQUIRED_FIELDS["critical"] if f not in filled]
+
+    def get_missing_important_fields(self) -> List[str]:
+        """Get list of important fields that are still missing."""
+        filled = self.get_filled_fields()
+        return [f for f in RESUME_REQUIRED_FIELDS["important"] if f not in filled]
+
+    def is_ready_for_generation(self) -> bool:
+        """Check if we have enough info to generate."""
+        return len(self.get_missing_critical_fields()) == 0
+
+    def get_completion_percentage(self) -> float:
+        """Calculate how complete the data collection is."""
+        all_required = RESUME_REQUIRED_FIELDS["critical"] + RESUME_REQUIRED_FIELDS["important"]
+        filled = [f for f in all_required if f in self.get_filled_fields()]
+        return (len(filled) / len(all_required)) * 100
+
+
 # ==============================================================================
 # GENERATED DOCUMENT MODELS
 # ==============================================================================
@@ -277,6 +358,9 @@ class GeneratedDocument(BaseModel):
     # Editor format (for rich text editor)
     editor_json: Optional[Dict[str, Any]] = None
     html: Optional[str] = None
+    
+    # Structured resume data for frontend editor (matches frontend ResumeDraftV1 format)
+    resume: Optional[Dict[str, Any]] = None
 
 
 # ==============================================================================
@@ -302,9 +386,10 @@ class DocumentBuilderState(BaseModel):
     document_type: Optional[DocumentType] = None
     phase: ConversationPhase = ConversationPhase.INITIAL
     
-    # Collected data (union of SOP and LOR data)
+    # Collected data (union of SOP, LOR, and Resume data)
     sop_data: Optional[SOPCollectedData] = None
     lor_data: Optional[LORCollectedData] = None
+    resume_data: Optional[ResumeCollectedData] = None
 
     # Uploaded files attached to this session (CV, transcripts, etc.)
     attachments: List[str] = Field(default_factory=list)
@@ -337,12 +422,14 @@ class DocumentBuilderState(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    def get_collected_data(self) -> Union[SOPCollectedData, LORCollectedData, None]:
+    def get_collected_data(self) -> Union[SOPCollectedData, LORCollectedData, ResumeCollectedData, None]:
         """Get the appropriate collected data based on document type."""
         if self.document_type == DocumentType.SOP:
             return self.sop_data
         elif self.document_type == DocumentType.LOR:
             return self.lor_data
+        elif self.document_type == DocumentType.RESUME or self.document_type == DocumentType.CV:
+            return self.resume_data
         return None
 
     def update_collected_data(self, field: str, value: Any):
@@ -353,6 +440,9 @@ class DocumentBuilderState(BaseModel):
         elif self.document_type == DocumentType.LOR and self.lor_data:
             if hasattr(self.lor_data, field):
                 setattr(self.lor_data, field, value)
+        elif (self.document_type == DocumentType.RESUME or self.document_type == DocumentType.CV) and self.resume_data:
+            if hasattr(self.resume_data, field):
+                setattr(self.resume_data, field, value)
         self.updated_at = datetime.utcnow()
 
     def is_ready_for_generation(self) -> bool:
@@ -432,6 +522,8 @@ def create_initial_state(
         state.sop_data = SOPCollectedData()
     elif doc_type == DocumentType.LOR:
         state.lor_data = LORCollectedData()
+    elif doc_type == DocumentType.RESUME or doc_type == DocumentType.CV:
+        state.resume_data = ResumeCollectedData()
     
     return state
 
@@ -442,18 +534,26 @@ def get_next_question_topic(state: DocumentBuilderState) -> Optional[str]:
     if not data:
         return None
     
+    # If ready for generation, don't ask more questions - let the flow proceed
+    if data.is_ready_for_generation():
+        return None
+    
     # Priority: critical fields first, then important
     missing_critical = data.get_missing_critical_fields()
     if missing_critical:
-        # Skip fields we've already asked about
+        # Skip fields we've already asked about OR that are already filled
+        filled = data.get_filled_fields()
         for field in missing_critical:
-            if field not in state.questions_asked:
+            if field not in state.questions_asked and field not in filled:
                 return field
     
+    # Only ask about important fields if critical are done but NOT ready for generation
+    # This avoids endless loop when user has filled some important fields voluntarily
     missing_important = data.get_missing_important_fields()
     if missing_important:
+        filled = data.get_filled_fields()
         for field in missing_important:
-            if field not in state.questions_asked:
+            if field not in state.questions_asked and field not in filled:
                 return field
     
     return None

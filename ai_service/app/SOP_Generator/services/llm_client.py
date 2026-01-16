@@ -219,9 +219,9 @@ class LLMClient:
             
             # Initialize Groq as fallback
             if GROQ_API_KEY:
-                logger.info("Initializing Groq LLM as fallback (llama-3.3-70b-versatile)")
-                self.groq_llm = ChatGroq(
-                    model="llama-3.3-70b-versatile",
+                logger.info("Initializing Groq LLM as fallback (openai/gpt-oss-120b)")
+                self._groq_llm = ChatGroq(
+                    model="openai/gpt-oss-120b",
                     api_key=GROQ_API_KEY,
                     temperature=0.3,
                 )

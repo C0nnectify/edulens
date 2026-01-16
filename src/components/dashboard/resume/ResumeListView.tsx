@@ -206,20 +206,20 @@ export function ResumeListView({ documentType = 'resume' }: ResumeListViewProps)
   );
 
   return (
-    <div className=" mx-auto py-8 px-4 ">
+    <div className="mx-auto py-4 lg:py-8 px-3 lg:px-4">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 lg:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-3xl font-bold">My {documentType === 'cv' ? 'CVs' : 'Resumes'}</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl lg:text-3xl font-bold">My {documentType === 'cv' ? 'CVs' : 'Resumes'}</h1>
+            <p className="text-muted-foreground mt-1 text-sm lg:text-base">
               {filteredResumes.length} {documentType === 'cv' ? 'CV' : 'resume'}{filteredResumes.length !== 1 && 's'}
             </p>
           </div>
 
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogTrigger asChild>
-              <Button size="lg" className="gap-2">
+              <Button size="lg" className="gap-2 w-full sm:w-auto">
                 <Plus className="w-4 h-4" />
                 Create {documentType === 'cv' ? 'CV' : 'Resume'}
               </Button>
@@ -290,24 +290,24 @@ export function ResumeListView({ documentType = 'resume' }: ResumeListViewProps)
         </div>
 
         {/* Search and Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 lg:gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
               placeholder="Search resumes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 h-10"
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
             {/* Filter */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-1 lg:gap-2 flex-shrink-0 h-10 px-2 lg:px-3">
                   <Filter className="w-4 h-4" />
-                  Filter
+                  <span className="hidden sm:inline">Filter</span>
                   {(filterFavorites || filterCategory !== 'all') && (
                     <span className="ml-1 px-1.5 py-0.5 text-xs bg-primary text-primary-foreground rounded">
                       {(filterFavorites ? 1 : 0) + (filterCategory !== 'all' ? 1 : 0)}
@@ -338,9 +338,9 @@ export function ResumeListView({ documentType = 'resume' }: ResumeListViewProps)
             {/* Sort */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-1 lg:gap-2 flex-shrink-0 h-10 px-2 lg:px-3">
                   <SortAsc className="w-4 h-4" />
-                  Sort
+                  <span className="hidden sm:inline">Sort</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -356,12 +356,12 @@ export function ResumeListView({ documentType = 'resume' }: ResumeListViewProps)
             </DropdownMenu>
 
             {/* View Mode */}
-            <div className="flex border rounded-md">
+            <div className="flex border rounded-md flex-shrink-0">
               <Button
                 variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
                 size="icon"
                 onClick={() => setViewMode('grid')}
-                className="rounded-r-none"
+                className="rounded-r-none h-10 w-10"
               >
                 <Grid3x3 className="w-4 h-4" />
               </Button>
@@ -369,7 +369,7 @@ export function ResumeListView({ documentType = 'resume' }: ResumeListViewProps)
                 variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                 size="icon"
                 onClick={() => setViewMode('list')}
-                className="rounded-l-none"
+                className="rounded-l-none h-10 w-10"
               >
                 <List className="w-4 h-4" />
               </Button>
@@ -385,10 +385,10 @@ export function ResumeListView({ documentType = 'resume' }: ResumeListViewProps)
           <p className="mt-4 text-muted-foreground">Loading resumes...</p>
         </div>
       ) : filteredResumes.length === 0 ? (
-        <div className="text-center py-12 bg-slate-50 dark:bg-slate-900 rounded-lg border-2 border-dashed">
-          <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold mb-2">No resumes yet</h3>
-          <p className="text-muted-foreground mb-6">
+        <div className="text-center py-8 lg:py-12 bg-slate-50 dark:bg-slate-900 rounded-lg border-2 border-dashed">
+          <FileText className="w-12 h-12 lg:w-16 lg:h-16 mx-auto mb-4 text-muted-foreground" />
+          <h3 className="text-base lg:text-lg font-semibold mb-2">No resumes yet</h3>
+          <p className="text-muted-foreground mb-6 text-sm lg:text-base px-4">
             {searchQuery ? 'No resumes match your search' : 'Create your first resume to get started'}
           </p>
           {!searchQuery && (
@@ -402,8 +402,8 @@ export function ResumeListView({ documentType = 'resume' }: ResumeListViewProps)
         <div
           className={cn(
             viewMode === 'grid'
-              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-              : 'space-y-4'
+              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6'
+              : 'space-y-3 lg:space-y-4'
           )}
         >
           {filteredResumes.map((resume) => (

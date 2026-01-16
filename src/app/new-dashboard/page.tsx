@@ -162,8 +162,8 @@ function NewDashboardInner() {
   const [inputValue, setInputValue] = useState("");
   
   // Sidebar state - closed by default on mobile, open on desktop
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
 
   // Dialog state
@@ -316,8 +316,8 @@ function NewDashboardInner() {
       {/* Left Sidebar - Floating on mobile, fixed on desktop */}
       <aside className={`
         fixed lg:relative inset-y-0 left-0 z-40
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        ${sidebarOpen ? 'w-[280px]' : 'w-0 lg:w-0'}
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
+        ${sidebarOpen ? 'w-[280px]' : 'w-0'} lg:w-[280px]
         bg-white/95 lg:bg-white/80 backdrop-blur-xl border-r border-gray-200/60 
         flex flex-col transition-all duration-300 overflow-hidden shadow-xl lg:shadow-sm
       `}>
@@ -688,14 +688,14 @@ function NewDashboardInner() {
       {/* Right Sidebar - Quick Access - Floating on mobile */}
       <aside className={`
         fixed lg:relative inset-y-0 right-0 z-40
-        ${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
-        ${rightSidebarOpen ? 'w-64' : 'w-0 lg:w-0'}
+        ${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0
+        ${rightSidebarOpen ? 'w-64' : 'w-0'} lg:w-64
         bg-white/95 lg:bg-white/50 backdrop-blur-sm border-l border-gray-200/60 
         flex flex-col transition-all duration-300 overflow-hidden shadow-xl lg:shadow-none
       `}>
         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-xs uppercase tracking-wider text-gray-400 font-bold">Quick Access</h3>
-          <button onClick={() => setRightSidebarOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
+          <button onClick={() => setRightSidebarOpen(false)} className="lg:hidden p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
             <X size={16} />
           </button>
         </div>
@@ -726,11 +726,11 @@ function NewDashboardInner() {
         </div>
       </aside>
 
-      {/* Right Sidebar Toggle Button (when closed) */}
+      {/* Right Sidebar Toggle Button (when closed) - only on mobile */}
       {!rightSidebarOpen && (
         <button
           onClick={() => setRightSidebarOpen(true)}
-          className="fixed right-4 top-4 lg:top-1/2 lg:-translate-y-1/2 p-2.5 bg-white border border-gray-200 rounded-xl shadow-lg hover:shadow-xl hover:border-gray-300 transition-all z-20"
+          className="fixed right-4 top-4 p-2.5 bg-white border border-gray-200 rounded-xl shadow-lg hover:shadow-xl hover:border-gray-300 transition-all z-20 lg:hidden"
           title="Open Quick Access"
         >
           <PanelRightOpen size={20} className="text-gray-600" />

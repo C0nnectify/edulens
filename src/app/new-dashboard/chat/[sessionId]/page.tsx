@@ -4,9 +4,9 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { 
-  Upload, Mic, Sparkles, FileText, Search, Paperclip, ChevronRight, Plus, Menu, 
+  Mic, Sparkles, FileText, Search, Paperclip, ChevronRight, Plus, 
   X, ChevronDown, FileEdit, Mail, Briefcase, GraduationCap, Check, AlertCircle, 
-  Loader2, File, Image, FileSpreadsheet, Trash2, ArrowLeft, Map, type LucideIcon 
+  Loader2, File, Image, FileSpreadsheet, ArrowLeft, Map, type LucideIcon 
 } from "lucide-react";
 import { sendMessage, sendJourneyMessage, uploadFile, getUserFiles, getHistory, DocumentType, FileAttachment } from "@/lib/api/chatOrchestrator";
 import { MarkdownContent } from "@/components/chat/MarkdownContent";
@@ -77,6 +77,7 @@ function ChatPageInner() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [pendingMessageProcessed, setPendingMessageProcessed] = useState(false);
   const [isJourneyMode, setIsJourneyMode] = useState(false);
+  const bootstrappedRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const documentTypeDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -84,38 +85,49 @@ function ChatPageInner() {
   const filePanelRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Check for pending message from dashboard
+  const getBootstrapKey = useCallback((id: string) => `chat-bootstrap-${id}`, []);
+
+  // If we were redirected from /chat/new -> /chat/{id}, restore messages immediately
   useEffect(() => {
-    if (sessionId === 'new' && !pendingMessageProcessed && typeof window !== 'undefined') {
-      const pendingStr = sessionStorage.getItem('pendingChatMessage');
-      if (pendingStr) {
-        try {
-          const pending = JSON.parse(pendingStr);
-          if (pending.message) {
-            setInput(pending.message);
-          }
-          if (pending.tool) {
-            setSelectedTool(pending.tool);
-          }
-          if (pending.documentType) {
-            setSelectedDocumentType(pending.documentType);
-          }
-          // Check for Journey mode
-          if (pending.isJourneyContext) {
-            setIsJourneyMode(true);
-          }
-          sessionStorage.removeItem('pendingChatMessage');
-        } catch (e) {
-          console.error("Failed to parse pending message", e);
-        }
+    if (bootstrappedRef.current) return;
+    if (typeof window === 'undefined') return;
+    if (!sessionId || sessionId === 'new') return;
+
+    const key = getBootstrapKey(sessionId);
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as {
+        messages?: ChatMessage[];
+        selectedTool?: FeatureKey;
+        selectedDocumentType?: DocumentType | 'analyze' | null;
+        isJourneyMode?: boolean;
+      };
+
+      if (typeof parsed.isJourneyMode === 'boolean') setIsJourneyMode(parsed.isJourneyMode);
+      if (parsed.selectedTool !== undefined) setSelectedTool(parsed.selectedTool);
+      if (parsed.selectedDocumentType !== undefined) setSelectedDocumentType(parsed.selectedDocumentType);
+      if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+        setMessages(parsed.messages);
       }
-      setPendingMessageProcessed(true);
+
+      bootstrappedRef.current = true;
+    } catch (e) {
+      console.error('Failed to parse chat bootstrap', e);
+    } finally {
+      window.sessionStorage.removeItem(key);
+      setIsLoadingHistory(false);
     }
-  }, [sessionId, pendingMessageProcessed]);
+  }, [sessionId, getBootstrapKey]);
 
   // Load chat history
   useEffect(() => {
     async function loadHistory() {
+      if (bootstrappedRef.current) {
+        setIsLoadingHistory(false);
+        return;
+      }
       if (sessionId === 'new') {
         setIsLoadingHistory(false);
         return;
@@ -261,22 +273,25 @@ function ChatPageInner() {
     return File;
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  const onSend = useCallback(async (override?: {
+    text?: string;
+    tool?: FeatureKey;
+    documentType?: DocumentType | 'analyze' | null;
+    isJourney?: boolean;
+  }) => {
+    const text = (override?.text ?? input).trim();
+    if (!text) return;
 
-  const onSend = useCallback(async () => {
-    if (!input.trim()) return;
+    const effectiveTool = override?.tool ?? selectedTool;
+    const effectiveDocumentType = override?.documentType ?? selectedDocumentType;
+    const effectiveIsJourney = override?.isJourney ?? isJourneyMode;
     
     // Skip document type check for Journey mode
-    if (!isJourneyMode && selectedTool === "document_builder" && !selectedDocumentType) {
+    if (!effectiveIsJourney && effectiveTool === "document_builder" && !effectiveDocumentType) {
       setMessages(prev => [...prev, { id: `hint-${Date.now()}`, role: "ai", content: "Please select a document type first." }]);
       return;
     }
-    
-    const text = input.trim();
+
     const normalizeCmd = (value: string) => value.toLowerCase().replace(/\s+/g, " ").replace(/[.!?]+$/g, "").trim();
     const normalizedCmd = normalizeCmd(text);
 
@@ -284,9 +299,9 @@ function ChatPageInner() {
     const cvDraftTriggers = ["generate cv", "make cv", "create cv", "build cv"];
     const containsAnyTrigger = (haystack: string, triggers: string[]) => triggers.some(t => haystack.includes(t));
 
-    const wantsGenerateDraft = selectedTool === "document_builder" && (
-      (selectedDocumentType === "resume" && containsAnyTrigger(normalizedCmd, resumeDraftTriggers)) ||
-      (selectedDocumentType === "cv" && containsAnyTrigger(normalizedCmd, cvDraftTriggers))
+    const wantsGenerateDraft = effectiveTool === "document_builder" && (
+      (effectiveDocumentType === "resume" && containsAnyTrigger(normalizedCmd, resumeDraftTriggers)) ||
+      (effectiveDocumentType === "cv" && containsAnyTrigger(normalizedCmd, cvDraftTriggers))
     );
 
     const previousAsUploaded: UploadedFile[] = previousFiles.filter(f => selectedFileIds.includes(f.id)).map(f => ({
@@ -296,7 +311,9 @@ function ChatPageInner() {
     const uploadedSelected = uploadedFiles.filter(f => selectedFileIds.includes(f.id));
     const currentAttachments = [...uploadedSelected, ...previousAsUploaded.filter(pf => !uploadedSelected.some(uf => uf.id === pf.id))];
     
-    setInput("");
+    if (!override?.text) {
+      setInput("");
+    }
     if (chatInputRef.current) chatInputRef.current.style.height = "auto";
     
     const localId = `m-${Date.now()}`;
@@ -305,59 +322,68 @@ function ChatPageInner() {
     
     try {
       // Handle Journey mode differently
-      if (isJourneyMode) {
+      if (effectiveIsJourney) {
         const currentSessionId = sessionId === 'new' ? undefined : sessionId;
         const journeyRes = await sendJourneyMessage(text, currentSessionId);
-        
-        // If this was a new chat, redirect to the actual session
-        if (sessionId === 'new' && journeyRes.session_id) {
-          router.replace(`/new-dashboard/chat/${journeyRes.session_id}`);
-        }
-        
+
         const aiMsg: ChatMessage = {
           id: `ai-${Date.now()}`,
           role: "ai",
           content: journeyRes.response || "",
         };
-        setMessages(prev => [...prev, aiMsg]);
-        
-        // Show update notifications if any
+
+        const systemMsgs: ChatMessage[] = [];
         if (journeyRes.roadmap_updates && Object.keys(journeyRes.roadmap_updates).length > 0) {
-          setMessages(prev => [...prev, { 
-            id: `system-${Date.now()}`, 
-            role: "ai", 
-            content: "✅ Your roadmap has been updated based on our conversation."
-          }]);
+          systemMsgs.push({
+            id: `system-roadmap-${Date.now()}`,
+            role: "ai",
+            content: "✅ Your roadmap has been updated based on our conversation.",
+          });
         }
         if (journeyRes.profile_updates && Object.keys(journeyRes.profile_updates).length > 0) {
-          setMessages(prev => [...prev, { 
-            id: `system-${Date.now()}`, 
-            role: "ai", 
-            content: "✅ Your profile has been updated with new information."
-          }]);
+          systemMsgs.push({
+            id: `system-profile-${Date.now()}`,
+            role: "ai",
+            content: "✅ Your profile has been updated with new information.",
+          });
         }
+
+        // If this was a new chat, persist messages and redirect to the actual session.
+        if (sessionId === 'new' && journeyRes.session_id && typeof window !== 'undefined') {
+          const key = getBootstrapKey(journeyRes.session_id);
+          const boot = {
+            isJourneyMode: true,
+            selectedTool: null as FeatureKey,
+            selectedDocumentType: null as DocumentType | 'analyze' | null,
+            messages: [...messages, { id: localId, role: 'user', content: text, attachments: currentAttachments.length > 0 ? currentAttachments : undefined }, aiMsg, ...systemMsgs],
+          };
+          try {
+            window.sessionStorage.setItem(key, JSON.stringify(boot));
+          } catch (e) {
+            console.error('Failed to persist chat bootstrap', e);
+          }
+          router.replace(`/new-dashboard/chat/${journeyRes.session_id}`);
+          return;
+        }
+
+        setMessages(prev => [...prev, aiMsg, ...systemMsgs]);
       } else {
         // Standard document builder flow
         const currentSessionId = sessionId === 'new' ? undefined : sessionId;
         const res = await sendMessage({
           sessionId: currentSessionId,
           message: text,
-          feature: selectedTool === "document_builder" ? "document_builder" : "general",
-          documentType: selectedTool === "document_builder" && selectedDocumentType !== 'analyze' ? selectedDocumentType : undefined,
+          feature: effectiveTool === "document_builder" ? "document_builder" : "general",
+          documentType: effectiveTool === "document_builder" && effectiveDocumentType !== 'analyze' ? effectiveDocumentType : undefined,
           attachmentIds: selectedFileIds,
           generateDraft: wantsGenerateDraft,
         });
-        
-        // If this was a new chat, redirect to the actual session
-        if (sessionId === 'new' && res.sessionId) {
-          router.replace(`/new-dashboard/chat/${res.sessionId}`);
-        }
 
         let draftKey: string | undefined;
-        if (typeof window !== "undefined" && res.documentDraft && selectedDocumentType !== 'analyze') {
+        if (typeof window !== "undefined" && res.documentDraft && effectiveDocumentType !== 'analyze') {
           try {
             draftKey = `docbuilder-draft-${res.sessionId}-${Date.now()}`;
-            window.localStorage.setItem(draftKey, JSON.stringify({ documentType: selectedDocumentType, documentDraft: res.documentDraft }));
+            window.localStorage.setItem(draftKey, JSON.stringify({ documentType: effectiveDocumentType, documentDraft: res.documentDraft }));
           } catch (e) {
             console.error("Failed to persist draft", e);
           }
@@ -372,9 +398,28 @@ function ChatPageInner() {
           progress: res.progress,
           documentDraft: res.documentDraft,
           action: res.action,
-          documentType: selectedDocumentType !== 'analyze' ? selectedDocumentType as DocumentType : null,
+          documentType: effectiveDocumentType !== 'analyze' ? effectiveDocumentType as DocumentType : null,
           draftKey,
         };
+
+        // If this was a new chat, persist messages and redirect so the new page renders instantly.
+        if (sessionId === 'new' && res.sessionId && typeof window !== 'undefined') {
+          const key = getBootstrapKey(res.sessionId);
+          const boot = {
+            isJourneyMode: false,
+            selectedTool: effectiveTool,
+            selectedDocumentType: effectiveDocumentType,
+            messages: [...messages, { id: localId, role: 'user', content: text, attachments: currentAttachments.length > 0 ? currentAttachments : undefined }, aiMsg],
+          };
+          try {
+            window.sessionStorage.setItem(key, JSON.stringify(boot));
+          } catch (e) {
+            console.error('Failed to persist chat bootstrap', e);
+          }
+          router.replace(`/new-dashboard/chat/${res.sessionId}`);
+          return;
+        }
+
         setMessages(prev => [...prev, aiMsg]);
       }
     } catch (err) {
@@ -383,7 +428,40 @@ function ChatPageInner() {
     } finally {
       setIsSending(false);
     }
-  }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles, previousFiles, router, isJourneyMode]);
+  }, [input, selectedTool, selectedDocumentType, sessionId, selectedFileIds, uploadedFiles, previousFiles, router, isJourneyMode, messages, getBootstrapKey]);
+
+  // Check for pending message from dashboard (auto-send once on /chat/new)
+  useEffect(() => {
+    if (sessionId === 'new' && !pendingMessageProcessed && typeof window !== 'undefined') {
+      const pendingStr = sessionStorage.getItem('pendingChatMessage');
+      if (pendingStr) {
+        try {
+          const pending = JSON.parse(pendingStr);
+          if (pending.tool !== undefined) {
+            setSelectedTool(pending.tool);
+          }
+          if (pending.documentType !== undefined) {
+            setSelectedDocumentType(pending.documentType);
+          }
+          if (typeof pending.isJourneyContext === 'boolean') {
+            setIsJourneyMode(pending.isJourneyContext);
+          }
+          if (pending.message) {
+            onSend({
+              text: pending.message,
+              tool: pending.tool ?? null,
+              documentType: pending.documentType ?? null,
+              isJourney: !!pending.isJourneyContext,
+            });
+          }
+          sessionStorage.removeItem('pendingChatMessage');
+        } catch (e) {
+          console.error("Failed to parse pending message", e);
+        }
+      }
+      setPendingMessageProcessed(true);
+    }
+  }, [sessionId, pendingMessageProcessed, onSend]);
 
   if (isLoadingHistory) {
     return (
@@ -616,7 +694,7 @@ function ChatPageInner() {
                 <Mic size={20} />
               </button>
               <button
-                onClick={onSend}
+                onClick={() => onSend()}
                 disabled={isSending || !input.trim()}
                 className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 disabled:from-gray-200 disabled:to-gray-300 text-white rounded-xl px-4 py-2 flex items-center gap-2 font-medium disabled:cursor-not-allowed"
               >
